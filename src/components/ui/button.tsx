@@ -1,10 +1,3 @@
-/**
- * Botão do design system (nó 74:11 do Figma).
- *
- * Variantes: Primary | Secondary  ×  Default | Disabled.
- * O estado desabilitado é o mesmo desenho com 45% de opacidade.
- */
-
 import { Pressable, StyleSheet, type PressableProps } from 'react-native';
 
 import { Text } from '@/components/ui/text';
@@ -34,8 +27,6 @@ export function Button({ label, type = 'primary', disabled, ...rest }: ButtonPro
           ? { backgroundColor: colors.accent }
           : { borderWidth: 1, borderColor: colors.accent },
         disabled && { opacity: DISABLED_OPACITY },
-        // Feedback de toque não especificado no Figma — escurecemos levemente,
-        // o mínimo para o toque não parecer sem resposta.
         pressed && !disabled && styles.pressed,
       ]}
       {...rest}>

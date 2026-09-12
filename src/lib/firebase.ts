@@ -1,17 +1,3 @@
-/**
- * PAUSA — Inicialização do Firebase
- *
- * As chaves do Firebase Web não são segredo: elas são embarcadas no app e
- * ficam visíveis para qualquer usuário. Quem protege os dados são as
- * Security Rules do Firestore (`firestore.rules`), não estas chaves.
- * Usamos variáveis de ambiente para trocar de projeto (dev/produção) sem
- * editar código.
- *
- * O módulo NÃO lança erro quando o .env está ausente. Isso é proposital:
- * permite trabalhar nas telas antes de o projeto Firebase existir. O acesso
- * ao Firestore passa por `requireDb()`, que aí sim falha com mensagem clara.
- */
-
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getApp, getApps, initializeApp, type FirebaseApp, type FirebaseOptions } from 'firebase/app';
 import { getAuth, getReactNativePersistence, initializeAuth, type Auth } from 'firebase/auth';
@@ -30,7 +16,6 @@ const missing = Object.entries(env)
   .filter(([, value]) => !value)
   .map(([key]) => key);
 
-/** `true` quando todas as variáveis EXPO_PUBLIC_FIREBASE_* estão preenchidas. */
 export const isFirebaseConfigured = missing.length === 0;
 
 if (!isFirebaseConfigured && __DEV__) {
@@ -42,11 +27,6 @@ if (!isFirebaseConfigured && __DEV__) {
   );
 }
 
-/**
- * Sem `getReactNativePersistence`, a sessão vive só em memória e o usuário é
- * deslogado toda vez que fecha o app. `initializeAuth` só roda uma vez por
- * app; no Fast Refresh caímos no `getAuth` da instância já existente.
- */
 function createAuth(app: FirebaseApp): Auth {
   try {
     return initializeAuth(app, { persistence: getReactNativePersistence(AsyncStorage) });
@@ -59,7 +39,7 @@ function init() {
   if (!isFirebaseConfigured) {
     return { app: null, auth: null, db: null };
   }
-  // `getApps()` evita reinicializar a cada Fast Refresh.
+
   const app = getApps().length === 0 ? initializeApp(env as FirebaseOptions) : getApp();
   return { app, auth: createAuth(app), db: getFirestore(app) };
 }
@@ -74,13 +54,11 @@ const NOT_CONFIGURED =
   'Firebase não configurado. Crie o arquivo .env a partir de .env.example ' +
   'com as credenciais do seu projeto no Console do Firebase.';
 
-/** Use nas telas que dependem de autenticação. Falha com mensagem clara. */
 export function requireAuth(): Auth {
   if (!auth) throw new Error(NOT_CONFIGURED);
   return auth;
 }
 
-/** Use nas telas que leem ou escrevem no Firestore. Falha com mensagem clara. */
 export function requireDb(): Firestore {
   if (!db) throw new Error(NOT_CONFIGURED);
   return db;

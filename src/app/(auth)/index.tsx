@@ -1,12 +1,3 @@
-/**
- * Tela de boas-vindas (nó 99:5 do Figma — "Splash / Epicteto").
- *
- * O Figma desenha a tela num quadro de 320×693, que é uma maquete reduzida.
- * Em vez de reproduzir as posições absolutas, o layout é uma coluna: a arte
- * do Epicteto absorve a altura extra dos aparelhos maiores e os blocos de
- * texto mantêm o ritmo de espaçamento do desenho.
- */
-
 import { useRouter } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,7 +14,7 @@ export default function BoasVindasScreen() {
   const router = useRouter();
 
   return (
-    // Esta tela usa `surface`, não `canvas`: é o fundo creme do desenho.
+
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.surface }]}>
       <Text variant="splashKicker" style={styles.kicker}>
         BOAS-VINDAS!
@@ -64,7 +55,7 @@ const styles = StyleSheet.create({
   kicker: {
     textAlign: 'center',
   },
-  /** A arte absorve a folga vertical das telas mais altas. */
+
   art: {
     flex: 1,
     minHeight: 200,

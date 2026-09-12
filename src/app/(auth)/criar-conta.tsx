@@ -5,12 +5,6 @@ import { Screen } from '@/components/ui/screen';
 import { Text } from '@/components/ui/text';
 import { spacing } from '@/theme';
 
-/**
- * Tela de cadastro.
- *
- * TODO: implementar o visual a partir do Figma quando a tela estiver
- * desenhada, e ligar o envio a `createUserWithEmailAndPassword`.
- */
 export default function CriarContaScreen() {
   return (
     <Screen style={styles.container}>
