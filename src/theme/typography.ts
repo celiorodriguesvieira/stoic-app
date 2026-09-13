@@ -6,6 +6,7 @@ export const fontFamily = {
 
   displayBold: 'PixelifySans_700Bold',
   displayRegular: 'PixelifySans_400Regular',
+  displayMedium: 'PixelifySans_500Medium',
 
   body: 'Inter_400Regular',
 
@@ -30,7 +31,7 @@ export const typography = {
   headingLarge: {
     fontFamily: fontFamily.display,
     fontSize: 28,
-    lineHeight: 34,
+    lineHeight: 32,
     ...weight,
   },
 
@@ -45,6 +46,7 @@ export const typography = {
     fontFamily: fontFamily.display,
     fontSize: 16,
     lineHeight: 20,
+    letterSpacing: 0.25,
     ...weight,
   },
 
@@ -58,7 +60,7 @@ export const typography = {
   bodyMedium: {
     fontFamily: fontFamily.body,
     fontSize: 16,
-    lineHeight: 24,
+    lineHeight: 22,
     ...weight,
   },
 
@@ -66,6 +68,62 @@ export const typography = {
     fontFamily: fontFamily.body,
     fontSize: 14,
     lineHeight: 20,
+    ...weight,
+  },
+
+  supportSemibold: {
+    fontFamily: fontFamily.bodyStrong,
+    fontSize: 14,
+    lineHeight: 20,
+    ...weight,
+  },
+
+  onboardingKicker: {
+    fontFamily: fontFamily.display,
+    fontSize: 14,
+    lineHeight: 17,
+    ...weight,
+  },
+
+  onboardingTitle: {
+    fontFamily: fontFamily.display,
+    fontSize: 36,
+    lineHeight: 43,
+    ...weight,
+  },
+
+  onboardingTitleCompact: {
+    fontFamily: fontFamily.display,
+    fontSize: 29,
+    lineHeight: 35,
+    ...weight,
+  },
+
+  optionTitle: {
+    fontFamily: fontFamily.display,
+    fontSize: 18,
+    lineHeight: 22,
+    ...weight,
+  },
+
+  optionLabel: {
+    fontFamily: fontFamily.displayMedium,
+    fontSize: 14,
+    lineHeight: 17,
+    ...weight,
+  },
+
+  portraitName: {
+    fontFamily: fontFamily.bodyStrong,
+    fontSize: 14,
+    lineHeight: 18,
+    ...weight,
+  },
+
+  portraitMeta: {
+    fontFamily: fontFamily.body,
+    fontSize: 11,
+    lineHeight: 14,
     ...weight,
   },
 

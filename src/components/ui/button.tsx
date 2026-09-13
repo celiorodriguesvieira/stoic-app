@@ -1,18 +1,32 @@
-import { Pressable, StyleSheet, type PressableProps } from 'react-native';
+import { Pressable, StyleSheet, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
 
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { minTouchTarget, radius } from '@/theme';
 
-const HEIGHT = 56;
+const HEIGHT = { large: 56, medium: 48 } as const;
 const DISABLED_OPACITY = 0.45;
 
 export type ButtonProps = Omit<PressableProps, 'children' | 'style'> & {
   label: string;
   type?: 'primary' | 'secondary';
+
+  size?: keyof typeof HEIGHT;
+
+  shape?: 'pill' | 'rounded';
+
+  style?: StyleProp<ViewStyle>;
 };
 
-export function Button({ label, type = 'primary', disabled, ...rest }: ButtonProps) {
+export function Button({
+  label,
+  type = 'primary',
+  size = 'large',
+  shape = 'pill',
+  disabled,
+  style,
+  ...rest
+}: ButtonProps) {
   const { colors } = useTheme();
   const isPrimary = type === 'primary';
 
@@ -23,15 +37,17 @@ export function Button({ label, type = 'primary', disabled, ...rest }: ButtonPro
       disabled={disabled}
       style={({ pressed }) => [
         styles.base,
+        { height: HEIGHT[size], borderRadius: shape === 'pill' ? radius.full : radius.md },
         isPrimary
           ? { backgroundColor: colors.accent }
           : { borderWidth: 1, borderColor: colors.accent },
         disabled && { opacity: DISABLED_OPACITY },
         pressed && !disabled && styles.pressed,
+        style,
       ]}
       {...rest}>
       <Text
-        variant="labelButtonCompact"
+        variant={size === 'large' ? 'labelButtonCompact' : 'labelButton'}
         color={isPrimary ? 'textOnAccent' : 'accent'}
         style={styles.label}>
         {label}
@@ -42,9 +58,7 @@ export function Button({ label, type = 'primary', disabled, ...rest }: ButtonPro
 
 const styles = StyleSheet.create({
   base: {
-    height: HEIGHT,
     minHeight: minTouchTarget,
-    borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 16,

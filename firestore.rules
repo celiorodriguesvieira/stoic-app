@@ -1,0 +1,96 @@
+rules_version = '2';
+
+// PAUSA — regras do Firestore.
+//
+// Contrato do handoff `600:75`: "Autorizar no backend; não confiar em campo de
+// perfil editável pelo cliente." Estas regras são esse backend. A tela apenas
+// esconde botões; quem impede a escrita é este arquivo.
+//
+// Publicar:  firebase deploy --only firestore:rules
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function autenticado() {
+      return request.auth != null;
+    }
+
+    function perfil() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
+    }
+
+    function papel() {
+      return autenticado() && exists(/databases/$(database)/documents/usuarios/$(request.auth.uid))
+        ? perfil().papel
+        : 'usuario';
+    }
+
+    function ehEditor() {
+      return papel() == 'editor' || papel() == 'administrador';
+    }
+
+    function ehAdmin() {
+      return papel() == 'administrador';
+    }
+
+    // --- Perfis ------------------------------------------------------------
+    match /usuarios/{uid} {
+      // Cada pessoa lê o próprio perfil; administrador lê todos (tela de permissões).
+      allow read: if autenticado() && (request.auth.uid == uid || ehAdmin());
+
+      // No cadastro, a própria pessoa cria o documento — e SÓ como 'usuario'.
+      // É isto que impede alguém de nascer administrador mandando um papel no payload.
+      allow create: if autenticado()
+        && request.auth.uid == uid
+        && request.resource.data.papel == 'usuario';
+
+      // Atualizar o próprio perfil é permitido, menos o campo `papel`.
+      allow update: if autenticado()
+        && request.auth.uid == uid
+        && request.resource.data.papel == resource.data.papel;
+
+      // Só administrador muda papel — e nunca o próprio, para não haver
+      // auto-promoção nem auto-rebaixamento do último admin.
+      allow update: if ehAdmin()
+        && request.auth.uid != uid
+        && request.resource.data.papel in ['usuario', 'editor', 'administrador'];
+
+      // Perfil não se apaga por aqui: apagar deixaria conteúdo órfão e sumiria
+      // com o rastro de auditoria.
+      allow delete: if false;
+    }
+
+    // --- Conteúdos ---------------------------------------------------------
+    match /conteudos/{id} {
+      // Qualquer pessoa autenticada lê o que está publicado; rascunho é da redação.
+      allow read: if autenticado() && (resource.data.status == 'publicado' || ehEditor());
+
+      allow create, update: if ehEditor();
+
+      allow delete: if ehAdmin();
+    }
+
+    // --- Conhecimento do dia ----------------------------------------------
+    match /agenda/{id} {
+      allow read: if autenticado();
+      allow write: if ehEditor();
+    }
+
+    // --- Auditoria ---------------------------------------------------------
+    match /auditoria/{id} {
+      // Só administrador lê o histórico.
+      allow read: if ehAdmin();
+
+      // Registro é append-only: cria-se, nunca se edita nem se apaga.
+      // O ator gravado tem de ser quem está autenticado — ninguém assina no
+      // lugar de outra pessoa.
+      allow create: if ehAdmin() && request.resource.data.atorUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // Nada mais é acessível.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

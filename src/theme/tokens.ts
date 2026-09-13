@@ -12,6 +12,10 @@ export const palette = {
     'text/on-emphasis-muted': '#c2bab5',
     'brand/gold': '#d69a26',
     'border/default': '#d8cec2',
+    'brand/wine': '#8a625a',
+    'text/error': '#a8322d',
+    'bg/selected': '#efe4d8',
+    'bg/portrait': '#e9dcc9',
   },
   dark: {
     'bg/canvas': '#171515',
@@ -28,6 +32,10 @@ export const palette = {
     'text/on-emphasis-muted': '#c2bab5',
     'brand/gold': '#e5b454',
     'border/default': '#4a423d',
+    'brand/wine': '#c29a90',
+    'text/error': '#f0948a',
+    'bg/selected': '#3a3128',
+    'bg/portrait': '#2e2620',
   },
 } as const;
 
@@ -56,6 +64,14 @@ function semantic(mode: keyof typeof palette) {
     gold: p['brand/gold'],
 
     border: p['border/default'],
+
+    wine: p['brand/wine'],
+
+    error: p['text/error'],
+
+    selected: p['bg/selected'],
+
+    portrait: p['bg/portrait'],
   } as const;
 }
 
