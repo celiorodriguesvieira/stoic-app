@@ -1,4 +1,4 @@
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -61,7 +61,8 @@ function mensagemDoErro(erro: unknown): string {
 
 export default function CriarContaScreen() {
   const { colors } = useTheme();
-  const { continueAsGuest, criarConta } = useAuth();
+  const router = useRouter();
+  const { criarConta } = useAuth();
 
   const [valores, setValores] = useState<Valores>({ nome: '', email: '', senha: '', confirmacao: '' });
   const [erros, setErros] = useState<Erros>({});
@@ -111,8 +112,10 @@ export default function CriarContaScreen() {
         senha: valores.senha,
       });
 
-      // Sucesso: `onAuthStateChanged` troca a rota. A senha nunca é guardada.
+      // Contrato item 01: Cadastro → Verificação de e-mail → Onboarding → Home.
+      // A senha nunca fica guardada.
       setValores((atual) => ({ ...atual, senha: '', confirmacao: '' }));
+      router.replace('/verificar-email');
     } catch (erro) {
       // Falha de rede mantém nome e e-mail para nova tentativa; a senha permanece
       // apenas no estado do componente, nunca em log ou no Firestore.
@@ -224,14 +227,6 @@ export default function CriarContaScreen() {
               size="medium"
               disabled={enviando}
               onPress={enviar}
-            />
-
-            <Button
-              label="CONTINUAR SEM CONTA"
-              type="secondary"
-              size="medium"
-              disabled={enviando}
-              onPress={continueAsGuest}
             />
 
             <Link href="/entrar" asChild>

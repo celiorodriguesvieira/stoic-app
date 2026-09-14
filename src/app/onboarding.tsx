@@ -8,7 +8,7 @@ import { ProgressoOnboarding } from '@/components/onboarding/progresso';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
-import { useOnboarding } from '@/lib/onboarding-context';
+import { useOnboarding, type ParcialOnboarding } from '@/lib/onboarding-context';
 import { spacing } from '@/theme';
 
 const NIVEIS = [
@@ -32,32 +32,52 @@ const HORIZONTAL_PADDING = 28;
 
 export default function OnboardingScreen() {
   const { colors } = useTheme();
-  const { finishOnboarding } = useOnboarding();
+  const { finishOnboarding, parcial, salvarParcial } = useOnboarding();
   const scrollRef = useRef<ScrollView>(null);
 
-  const [etapa, setEtapa] = useState(0);
-  const [nivel, setNivel] = useState<string | null>(null);
-  const [interesses, setInteresses] = useState<string[]>([]);
+  /**
+   * Etapa e escolhas num objeto só.
+   *
+   * Retoma de onde parou (contrato `618:18`, item 02) — o provedor termina de
+   * ler o armazenamento antes desta tela montar, então o valor inicial serve.
+   * Manter tudo junto garante que cada mudança seja gravada por inteiro, em vez
+   * de três estados que podem sair de sincronia com o que está no aparelho.
+   */
+  const [rascunho, setRascunho] = useState<ParcialOnboarding>(
+    () => parcial ?? { etapa: 0, nivel: null, interesses: [] },
+  );
+
+  const { etapa, nivel, interesses } = rascunho;
+
+  function atualizar(mudanca: Partial<ParcialOnboarding>) {
+    const proximo = { ...rascunho, ...mudanca };
+    setRascunho(proximo);
+    salvarParcial(proximo);
+  }
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ y: 0, animated: false });
 
-    if (etapa === 0) {
+    if (rascunho.etapa === 0) {
       return;
     }
 
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      setEtapa((atual) => atual - 1);
+      const anterior = { ...rascunho, etapa: rascunho.etapa - 1 };
+      setRascunho(anterior);
+      salvarParcial(anterior);
       return true;
     });
 
     return () => subscription.remove();
-  }, [etapa]);
+  }, [rascunho, salvarParcial]);
 
   function alternarInteresse(id: string) {
-    setInteresses((atual) =>
-      atual.includes(id) ? atual.filter((item) => item !== id) : [...atual, id],
-    );
+    atualizar({
+      interesses: interesses.includes(id)
+        ? interesses.filter((item) => item !== id)
+        : [...interesses, id],
+    });
   }
 
   return (
@@ -100,7 +120,7 @@ export default function OnboardingScreen() {
                     titulo={item.titulo}
                     descricao={item.descricao}
                     selecionado={nivel === item.id}
-                    onPress={() => setNivel(item.id)}
+                    onPress={() => atualizar({ nivel: item.id })}
                   />
                 ))}
               </View>
@@ -155,7 +175,11 @@ export default function OnboardingScreen() {
 
         <View style={[styles.rodape, etapa === 0 && styles.rodapeAmplo]}>
           {etapa === 0 ? (
-            <Button label="COMEÇAR" shape="rounded" onPress={() => setEtapa(1)} />
+            <Button
+              label="COMEÇAR"
+              shape="rounded"
+              onPress={() => atualizar({ etapa: 1 })}
+            />
           ) : (
             <Button
               label="CONTINUAR"

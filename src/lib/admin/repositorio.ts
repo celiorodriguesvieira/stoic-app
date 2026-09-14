@@ -325,6 +325,8 @@ function paraPerfil(uid: string, dados: DocumentData): PerfilUsuario {
     nome: texto(dados.nome),
     email: texto(dados.email),
     papel: (papel === 'editor' || papel === 'administrador' ? papel : PAPEL_PADRAO) as Papel,
+    // O painel não usa preferências; lê como nulo para não alegar o que não leu.
+    preferencias: null,
   };
 }
 

@@ -6,7 +6,7 @@ import { PixelifySans_500Medium } from '@expo-google-fonts/pixelify-sans/500Medi
 import { PixelifySans_600SemiBold } from '@expo-google-fonts/pixelify-sans/600SemiBold';
 import { PixelifySans_700Bold } from '@expo-google-fonts/pixelify-sans/700Bold';
 import { useFonts } from 'expo-font';
-import { Stack, useSegments } from 'expo-router';
+import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
@@ -48,14 +48,11 @@ export default function RootLayout() {
 
 function RootNavigator() {
   const { colors } = useTheme();
-  const { isSignedIn, podeEditar, initializing: authInitializing } = useAuth();
+  const { isSignedIn, verificacaoPendente, initializing: authInitializing } = useAuth();
   const { onboardingDone, initializing: onboardingInitializing } = useOnboarding();
 
-  // O painel administrativo é separado do app público: não recebe a splash.
-  const segments = useSegments();
-  const noAdmin = segments[0] === 'admin';
-
-  // A splash roda em toda abertura, por cima da rota inicial que já carrega por baixo.
+  // A splash abre TODA sessão, sem exceção — inclusive o painel administrativo.
+  // Roda por cima da rota inicial, que já carrega por baixo.
   const [splashDone, setSplashDone] = useState(false);
   const finishSplash = useCallback(() => setSplashDone(true), []);
 
@@ -71,44 +68,50 @@ function RootNavigator() {
     return null;
   }
 
-  const mostrarSplash = !splashDone && !noAdmin;
-
   return (
     <View style={styles.root}>
       <View
         style={styles.root}
-        importantForAccessibility={mostrarSplash ? 'no-hide-descendants' : 'auto'}
-        accessibilityElementsHidden={mostrarSplash}>
+        importantForAccessibility={splashDone ? 'auto' : 'no-hide-descendants'}
+        accessibilityElementsHidden={!splashDone}>
         <Stack
           screenOptions={{
             headerShown: false,
             contentStyle: { backgroundColor: colors.canvas },
           }}>
-          <Stack.Protected guard={isSignedIn && onboardingDone}>
+          {/*
+            Contrato de navegação `618:18`.
+
+            01 · Primeiro acesso: Boas-vindas → Criar conta ou Entrar.
+                 Não existe entrada sem cadastro (item 06).
+            02 · Depois: decidido pelo estado salvo, nunca por contagem de aberturas.
+
+            A verificação de e-mail mantém a pessoa em `(auth)` mesmo já
+            autenticada — é a etapa entre o cadastro e o onboarding.
+          */}
+          <Stack.Protected guard={isSignedIn && !verificacaoPendente && onboardingDone}>
             <Stack.Screen name="(tabs)" />
           </Stack.Protected>
 
-          <Stack.Protected guard={isSignedIn && !onboardingDone}>
+          <Stack.Protected guard={isSignedIn && !verificacaoPendente && !onboardingDone}>
             <Stack.Screen name="onboarding" />
           </Stack.Protected>
 
-          <Stack.Protected guard={!isSignedIn}>
+          <Stack.Protected guard={!isSignedIn || verificacaoPendente}>
             <Stack.Screen name="(auth)" />
           </Stack.Protected>
 
           {/*
-            Painel administrativo. A pilha só existe para editor ou administrador —
-            quem não tem papel não consegue nem digitar /admin na barra de endereço.
-            É conveniência de navegação, não segurança: quem protege os dados são as
-            Security Rules em `firestore.rules`.
+            04 · O painel é sempre montado: quem não tem papel precisa receber
+            "Acesso não autorizado", e não ver a rota desaparecer sem explicação.
+            Quem decide é `admin/_layout.tsx`. Os dados seguem protegidos pelas
+            Security Rules — a tela nunca foi a barreira.
           */}
-          <Stack.Protected guard={podeEditar}>
-            <Stack.Screen name="admin" />
-          </Stack.Protected>
+          <Stack.Screen name="admin" />
         </Stack>
       </View>
 
-      {mostrarSplash && <SplashOverlay onFinish={finishSplash} />}
+      {!splashDone && <SplashOverlay onFinish={finishSplash} />}
     </View>
   );
 }

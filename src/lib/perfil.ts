@@ -28,11 +28,26 @@ export const ROTULO_PAPEL: Record<Papel, string> = {
   administrador: 'Administrador',
 };
 
+/**
+ * Preferências escolhidas no onboarding.
+ *
+ * Ficam no perfil, e não numa coleção à parte, porque são poucas, mudam pouco e
+ * são sempre lidas junto com o perfil. `atualizadoEm` é milissegundos do
+ * cliente: serve para reconciliar com o que está no aparelho (item 03 do
+ * contrato `618:18`), não para ordenar registros no servidor.
+ */
+export type PreferenciasPerfil = {
+  nivel: string | null;
+  interesses: string[];
+  atualizadoEm: number;
+};
+
 export type PerfilUsuario = {
   uid: string;
   nome: string;
   email: string;
   papel: Papel;
+  preferencias: PreferenciasPerfil | null;
 };
 
 /** Editor e administrador entram no painel; administrador também mexe em pessoas. */
@@ -46,6 +61,20 @@ export function podeGerenciarUsuarios(papel: Papel | null): boolean {
 
 function ehPapel(valor: unknown): valor is Papel {
   return typeof valor === 'string' && (PAPEIS as readonly string[]).includes(valor);
+}
+
+function lerPreferencias(valor: unknown): PreferenciasPerfil | null {
+  if (!valor || typeof valor !== 'object') return null;
+
+  const bruto = valor as Record<string, unknown>;
+
+  return {
+    nivel: typeof bruto.nivel === 'string' ? bruto.nivel : null,
+    interesses: Array.isArray(bruto.interesses)
+      ? bruto.interesses.filter((item): item is string => typeof item === 'string')
+      : [],
+    atualizadoEm: typeof bruto.atualizadoEm === 'number' ? bruto.atualizadoEm : 0,
+  };
 }
 
 const COLECAO = 'usuarios';
@@ -77,13 +106,52 @@ export async function criarPerfil(
   );
 }
 
-/** Observa o perfil do UID. Devolve `null` enquanto não há Firestore ou documento. */
+/**
+ * Resultado da leitura do perfil.
+ *
+ * A distinção entre `erro` e `pronto` com papel `usuario` importa: o contrato de
+ * navegação (`618:18`, item 05) diz que "falha de rede não significa conta
+ * inexistente ou ausência de permissão". Colapsar os dois em `null` faria uma
+ * queda de rede expulsar um administrador do painel.
+ */
+export type LeituraPerfil =
+  | { estado: 'carregando' }
+  | { estado: 'pronto'; perfil: PerfilUsuario | null }
+  | { estado: 'erro'; mensagem: string };
+
+/**
+ * Grava as preferências do onboarding no perfil.
+ *
+ * `merge: true` toca apenas o campo `preferencias` — o `papel` fica intacto, que
+ * é o que as Security Rules exigem para deixar a própria pessoa escrever no seu
+ * documento.
+ */
+export async function salvarPreferencias(
+  uid: string,
+  preferencias: { nivel: string | null; interesses: string[] },
+): Promise<void> {
+  if (!db) return;
+
+  await setDoc(
+    doc(db, COLECAO, uid),
+    {
+      preferencias: {
+        nivel: preferencias.nivel,
+        interesses: preferencias.interesses,
+        atualizadoEm: Date.now(),
+      },
+    },
+    { merge: true },
+  );
+}
+
+/** Observa o perfil do UID, distinguindo "ainda não sei" de "não tem". */
 export function observarPerfil(
   uid: string,
-  aoMudar: (perfil: PerfilUsuario | null) => void,
+  aoMudar: (leitura: LeituraPerfil) => void,
 ): () => void {
   if (!db) {
-    aoMudar(null);
+    aoMudar({ estado: 'erro', mensagem: 'Firebase não configurado.' });
     return () => {};
   }
 
@@ -93,18 +161,24 @@ export function observarPerfil(
       const dados = instantaneo.data();
 
       if (!dados) {
-        aoMudar(null);
+        // Documento ausente é resposta válida do servidor: a conta existe e
+        // ainda não tem perfil. Não é erro.
+        aoMudar({ estado: 'pronto', perfil: null });
         return;
       }
 
       aoMudar({
-        uid,
-        nome: typeof dados.nome === 'string' ? dados.nome : '',
-        email: typeof dados.email === 'string' ? dados.email : '',
-        // Papel desconhecido ou ausente cai no mais restrito, nunca no mais permissivo.
-        papel: ehPapel(dados.papel) ? dados.papel : PAPEL_PADRAO,
+        estado: 'pronto',
+        perfil: {
+          uid,
+          nome: typeof dados.nome === 'string' ? dados.nome : '',
+          email: typeof dados.email === 'string' ? dados.email : '',
+          // Papel desconhecido ou ausente cai no mais restrito, nunca no mais permissivo.
+          papel: ehPapel(dados.papel) ? dados.papel : PAPEL_PADRAO,
+          preferencias: lerPreferencias(dados.preferencias),
+        },
       });
     },
-    () => aoMudar(null),
+    (falha) => aoMudar({ estado: 'erro', mensagem: falha.message }),
   );
 }

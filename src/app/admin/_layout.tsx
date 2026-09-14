@@ -1,19 +1,59 @@
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
+import { useState } from 'react';
+import { StyleSheet, View } from 'react-native';
 
+import { Carregando } from '@/components/admin/estados';
+import { PaginaAdmin } from '@/components/admin/pagina';
+import { Button } from '@/components/ui/button';
+import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
+import { useAuth } from '@/lib/auth-context';
+import { spacing } from '@/theme';
 
 /**
- * Painel administrativo.
+ * Painel administrativo — porteiro.
  *
- * Quem pode entrar é decidido em `src/app/_layout.tsx`: a pilha inteira só é
- * registrada para editor ou administrador (`Stack.Protected`). Se o papel cair
- * no meio da sessão, as telas somem e o roteador leva de volta para o app.
+ * Contrato `618:18`:
+ *   04 · "Login → servidor valida papel → Editor ou Administrador entra em
+ *         Conteúdos. Usuário comum/visitante recebe Acesso não autorizado."
+ *         "No retorno ao painel, revalidar sessão e autorização; sessão
+ *         expirada exige login."
+ *   05 · "Falha de rede não significa conta inexistente ou ausência de
+ *         permissão."
  *
- * Isso é conveniência de navegação, não segurança — quem protege os dados são
- * as Security Rules em `firestore.rules`.
+ * Por isso há quatro respostas distintas, e não duas: carregando, erro de
+ * leitura, não autorizado e autorizado. Colapsar as duas primeiras em "não
+ * autorizado" expulsaria um administrador por causa de wi-fi ruim.
+ *
+ * Nada disto é segurança — é explicação. Quem protege os dados são as Security
+ * Rules em `firestore.rules`.
  */
 export default function AdminLayout() {
   const { colors } = useTheme();
+  const { user, isSignedIn, podeEditar, papelIndefinido, erroDePerfil } = useAuth();
+
+  // Sessão expirada ou inexistente: o contrato manda voltar ao login.
+  // `isSignedIn` e não `user`, senão o atalho de desenvolvimento (sem usuário
+  // do Firebase) seria mandado para o login que ele justamente pula.
+  if (!isSignedIn) {
+    return <PrecisaEntrar />;
+  }
+
+  if (user && erroDePerfil) {
+    return <FalhaAoValidar mensagem={erroDePerfil} />;
+  }
+
+  if (papelIndefinido) {
+    return (
+      <PaginaAdmin titulo="PAINEL" apoio="Validando seu acesso…">
+        <Carregando rotulo="Conferindo permissões…" />
+      </PaginaAdmin>
+    );
+  }
+
+  if (!podeEditar) {
+    return <AcessoNaoAutorizado />;
+  }
 
   return (
     <Stack
@@ -24,3 +64,111 @@ export default function AdminLayout() {
     />
   );
 }
+
+function VoltarAoApp() {
+  const router = useRouter();
+
+  return (
+    <Button
+      label="VOLTAR AO APP"
+      type="secondary"
+      size="medium"
+      onPress={() => router.replace('/')}
+      style={styles.botao}
+    />
+  );
+}
+
+/**
+ * Acesso não autorizado — nó `626:31` do Figma.
+ *
+ * Item 06: "Entrar com outra conta encerra a sessão e abre Login mantendo o
+ * destino painel." Daí o `?destino=/admin`: depois de entrar, a pessoa volta
+ * para onde estava tentando ir, e não para a Home.
+ */
+function AcessoNaoAutorizado() {
+  const router = useRouter();
+  const { sair } = useAuth();
+  const [saindo, setSaindo] = useState(false);
+
+  async function entrarComOutraConta() {
+    if (saindo) return;
+    setSaindo(true);
+
+    try {
+      await sair();
+      router.replace('/entrar?destino=/admin');
+    } catch {
+      setSaindo(false);
+    }
+  }
+
+  return (
+    <PaginaAdmin titulo="ACESSO NÃO AUTORIZADO">
+      <View style={styles.bloco}>
+        <Text variant="supportSemibold">
+          Sua conta não tem permissão para acessar o painel administrativo. Se você precisa desse
+          acesso, entre em contato com o administrador responsável.
+        </Text>
+
+        <Button
+          label={saindo ? 'Saindo…' : 'ENTRAR COM OUTRA CONTA'}
+          size="medium"
+          disabled={saindo}
+          onPress={entrarComOutraConta}
+          style={styles.botao}
+        />
+      </View>
+    </PaginaAdmin>
+  );
+}
+
+function PrecisaEntrar() {
+  const router = useRouter();
+
+  return (
+    <PaginaAdmin titulo="ENTRE PARA CONTINUAR" apoio="O painel exige uma sessão válida.">
+      <View style={styles.bloco}>
+        <Text>Sua sessão expirou ou você ainda não entrou nesta conta.</Text>
+
+        <Button
+          label="IR PARA O LOGIN"
+          size="medium"
+          onPress={() => router.replace('/entrar')}
+          style={styles.botao}
+        />
+      </View>
+    </PaginaAdmin>
+  );
+}
+
+/** Falha ao ler o perfil. Nunca tratada como ausência de permissão (item 05). */
+function FalhaAoValidar({ mensagem }: { mensagem: string }) {
+  return (
+    <PaginaAdmin titulo="PAINEL" apoio="Não foi possível validar seu acesso.">
+      <View style={styles.bloco}>
+        <Text color="error" accessibilityLiveRegion="polite">
+          {mensagem}
+        </Text>
+
+        <Text color="textSecondary">
+          Isto é uma falha de conexão, não uma negativa de permissão. A validação é refeita
+          sozinha assim que a conexão voltar.
+        </Text>
+
+        <VoltarAoApp />
+      </View>
+    </PaginaAdmin>
+  );
+}
+
+const styles = StyleSheet.create({
+  bloco: {
+    gap: spacing.lg,
+    alignItems: 'flex-start',
+    maxWidth: 640,
+  },
+  botao: {
+    paddingHorizontal: spacing['3xl'],
+  },
+});

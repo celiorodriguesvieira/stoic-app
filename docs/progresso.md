@@ -8,48 +8,130 @@ mova o que foi feito para "Histórico" e revise "Próximos passos".
 **Estado do git:** tudo abaixo está **sem commit**.
 **Verificação:** `npx tsc --noEmit` passa, `npx expo lint` não acusa nada no
 código novo e `npx expo export` gera os bundles de iOS e web (as 6 rotas de
-`/admin` aparecem na saída). Nada foi conferido visualmente ainda — nem no
-simulador, nem no navegador.
+`/admin` aparecem na saída). As Security Rules foram testadas contra o projeto
+real (ver abaixo). **Nenhuma tela foi conferida visualmente ainda.**
+
+## Firebase (projeto `pausa-cc7f3`)
+
+Configurado em 2026-09-13. Credenciais no `.env` (não versionado); o
+`.env.example` continua sendo só modelo.
+
+| Item | Estado |
+| --- | --- |
+| Authentication · e-mail/senha | ligado |
+| Firestore | criado em `southamerica-east1` (São Paulo) |
+| Security Rules | publicadas a partir de `firestore.rules` |
+
+O banco foi criado uma primeira vez pelo `deploy`, que o pôs em `nam5` (EUA).
+Como estava vazio, foi apagado e recriado em São Paulo — latência menor para os
+usuários de teste conta para a proposição P2 (usabilidade percebida). Reusar o
+id `(default)` exige esperar ~5 min de carência depois de apagar.
+
+### Preferências do onboarding
+
+Nível e interesses vão para **os dois lados**: `AsyncStorage` (funciona offline e
+para visitante) e `usuarios/{uid}.preferencias` no Firestore quando há conta.
+Falha de rede não trava o onboarding — fica no aparelho e sobe na entrada
+seguinte.
+
+Sem isso, a promessa do cadastro ("continue de onde parou em outros aparelhos")
+não se cumpriria, e não haveria como cruzar perfil com desempenho na avaliação
+de **P1**.
+
+### Regras verificadas contra o backend real
+
+Feito com uma conta de teste (criada e removida em seguida), via REST:
+
+| Tentativa | Esperado | Resultado |
+| --- | --- | --- |
+| Cadastro nascer `administrador` | negado | 403 |
+| Cadastro nascer `editor` | negado | 403 |
+| Cadastro nascer `usuario` | permitido | 200 |
+| `usuario` criar conteúdo | negado | 403 |
+| `usuario` se autopromover | negado | 403 |
+| `usuario` ler a lista de usuários | negado | 403 |
+| `usuario` ler o próprio perfil | permitido | 200 |
+| `usuario` gravar as próprias preferências | permitido | 200 |
+| `usuario` subir o papel junto com as preferências | negado | 403 |
+
+Script em `scratchpad/teste-regras.sh` (fora do repositório). Vale repetir depois
+de qualquer mudança em `firestore.rules`.
 
 ---
 
 ## Fluxo de entrada do app
 
+Fonte: **LEIA PRIMEIRO / Regras de acesso / App e Admin** (`618:18`), o
+contrato de navegação do Figma. Os itens citados abaixo são os dele.
+
 ```
-Toda abertura ──> Splash (5 s, tocar pula)
-                     │
-     primeiro acesso ├──> Cadastro ──> Onboarding (2 telas) ──> Abas
-                     │     (criar conta OU continuar sem conta)
-                     │
-     acessos seguintes └──> Abas
+Splash (sempre, automática)
+        │
+        ├─ primeiro acesso ──> BOAS-VINDAS
+        │                        ├── Criar conta ──> Cadastro ──> Verificar e-mail ─┐
+        │                        └── Entrar ──────> Login ───────────────────────────┤
+        │                                                                            │
+        │                                            onboarding concluído? ──────────┤
+        │                                              não ──> Onboarding ──> Home   │
+        │                                              sim ─────────────────> Home <─┘
+        │
+        └─ depois ──> Home   (sessão válida)   |   sem sessão ──> Login
 ```
 
-Quem decide a tela é `src/app/_layout.tsx`, com três guardas (`Stack.Protected`):
+**Não existe entrada sem cadastro** (item 06). O modo visitante foi removido em
+2026-09-13 — ver "Decisões tomadas".
+
+Quem decide é `src/app/_layout.tsx`. Nada conta aberturas: tudo sai do estado
+salvo (item 02).
 
 | Situação | Tela |
 | --- | --- |
-| Sem conta e não é visitante | `(auth)` → começa em `criar-conta` |
-| Tem conta ou é visitante, onboarding pendente | `onboarding` |
-| Tem conta ou é visitante, onboarding concluído | `(tabs)` |
+| Sem sessão | `(auth)` → começa em **Boas-vindas** |
+| Cadastro feito, e-mail não confirmado | `(auth)` → `verificar-email` |
+| Onboarding pendente ou interrompido | `onboarding`, **retomando a etapa salva** |
+| Sessão + onboarding concluído | `(tabs)` → Home |
+| `/admin` | sempre montado; quem entra é decidido lá dentro |
 
 A splash não é rota: é uma camada por cima (`SplashOverlay`) enquanto a rota
-certa já carrega por baixo. O painel administrativo não recebe splash — é
-separado do app público.
+certa já carrega por baixo. Vale **inclusive para o painel administrativo**.
 
-| Situação | Tela |
+### Acesso ao painel (item 04)
+
+`src/app/admin/_layout.tsx` dá **quatro** respostas diferentes, não duas:
+
+| Estado | Tela |
 | --- | --- |
-| Papel `editor` ou `administrador` | `/admin` fica acessível por URL |
+| Sem sessão | "Entre para continuar" → Login |
+| Perfil ainda carregando | "Conferindo permissões…" |
+| Falha ao ler o perfil | "Não foi possível validar" — **nunca** "não autorizado" (item 05) |
+| Papel `usuario` | **Acesso não autorizado** (`626:31`) |
+| Papel `editor` ou `administrador` | o painel |
 
-Não há botão para o painel em lugar nenhum do app: chega-se digitando o
-endereço. Quem não tem papel não consegue nem isso — a pilha nem é registrada.
+Separar as duas do meio é o que impede uma queda de rede de expulsar um
+administrador do painel.
+
+"Entrar com outra conta" encerra a sessão e vai para `/entrar?destino=/admin` —
+depois de entrar, a pessoa volta ao painel, não à Home (item 06). O parâmetro
+`destino` aceita apenas uma **lista fechada** de caminhos; validar por prefixo
+transformaria o login num redirecionador aberto.
 
 ### Estado salvo no aparelho (AsyncStorage)
 
-| Chave | Conteúdo | Onde |
-| --- | --- | --- |
-| `pausa:visitante` | `"true"` depois de "Continuar sem conta" | `src/lib/auth-context.tsx` |
-| `pausa:onboarding-concluido` | `"true"` ao terminar o onboarding | `src/lib/onboarding-context.tsx` |
-| `pausa:preferencias` | `{ nivel, interesses[] }` escolhidos no onboarding | `src/lib/onboarding-context.tsx` |
+O item 03 do contrato exige **cache separado por usuário**, então as chaves
+levam o UID: duas pessoas no mesmo aparelho não compartilham onboarding.
+
+| Chave | Conteúdo |
+| --- | --- |
+| `pausa:{uid}:onboarding-concluido` | `"true"` ao terminar o onboarding |
+| `pausa:{uid}:preferencias` | `{ nivel, interesses[], atualizadoEm }` |
+| `pausa:{uid}:onboarding-parcial` | etapa e escolhas de um onboarding interrompido |
+| `pausa:verificacao-pendente` | UID cuja verificação de e-mail ficou pendente |
+| `pausa:cache-adotado-por` | UID que herdou o cache da era do visitante |
+
+As chaves globais antigas (`pausa:onboarding-concluido`, `pausa:preferencias`,
+`pausa:onboarding-parcial`, `pausa:visitante`) são **copiadas para a primeira
+conta que abrir o app e nunca apagadas** — o item 03 diz que "a remoção do modo
+visitante não autoriza apagar dados locais existentes".
 
 Para ver o primeiro acesso de novo, apague os dados do app (desinstale o Expo Go
 do simulador).
@@ -58,10 +140,25 @@ do simulador).
 
 ## Decisões tomadas
 
-- **Cadastro é opcional.** O MVP guarda progresso localmente e o TCC (seção 20
-  do `IDEIA.md`) pede coleta mínima de dados e identificadores anônimos. Exigir
-  e-mail e senha também prejudicaria a nota de usabilidade (SUS) e vai contra a
-  regra 5.1.1(v) da App Store.
+- **A splash dura 5 s, e isso prevalece sobre o contrato.** O item 01 do
+  `618:18` diz "sem atraso artificial", mas os 5 s existem para dar tempo de ler
+  a citação — decisão do autor em 2026-09-12, reafirmada em 2026-09-13. Vale
+  corrigir o texto do contrato no Figma.
+- **A splash abre toda sessão, sem exceção** — inclusive o painel admin. Chegou
+  a ficar de fora do `/admin` por o contrato dizer que o painel é separado do
+  app público; revertido a pedido.
+- **O modo visitante foi removido** (2026-09-13, decisão do autor no Figma). O
+  contrato `618:18` passou a dizer "o acesso ao app exige conta autenticada" e
+  "não existe entrada sem cadastro"; "Continuar sem conta" saiu do Cadastro e do
+  Login. Isso reverte a decisão de 2026-09-12 de cadastro opcional.
+
+  **Três consequências registradas na hora da decisão**, para não se perderem:
+  a seção 20 do `IDEIA.md` pede coleta mínima; exigir conta antes de mostrar o
+  app tende a derrubar a nota de **SUS**, que é a proposição **P2**; e a regra
+  **5.1.1(v) da App Store** proíbe exigir cadastro quando o app funciona sem
+  ele — esta última é motivo de rejeição na revisão da Apple, não preferência.
+- **Não haverá auth anônimo.** Chegou a ser cogitado para guardar dados de quem
+  não tinha conta; com o cadastro obrigatório, perdeu a razão de existir.
 - **Splash aparece em toda abertura**, dura **5 s** (a spec do Figma dizia
   2,2 s, curto demais para ler a citação) e **não tem botão** — tocar em
   qualquer lugar adianta a saída. Com "reduzir movimento", sai sem animação.
@@ -93,7 +190,11 @@ do simulador).
 | --- | --- | --- |
 | Splash (Epicteto) | `src/components/splash-overlay.tsx` | `1:2`, `99:4` |
 | Cadastro | `src/app/(auth)/criar-conta.tsx` | `576:12` |
-| Entrar (placeholder) | `src/app/(auth)/entrar.tsx` | — ainda não desenhada |
+| Entrar | `src/app/(auth)/entrar.tsx` | `612:12` |
+| Recuperar senha (2 estados) | `src/app/(auth)/recuperar-senha.tsx` | `613:14`, `613:43` |
+| Boas-vindas | `src/app/(auth)/index.tsx` | `621:18` |
+| Verificar e-mail | `src/app/(auth)/verificar-email.tsx` | `626:18` |
+| Acesso não autorizado | dentro de `src/app/admin/_layout.tsx` | `626:31` |
 | Onboarding 01 e 02 | `src/app/onboarding.tsx` | `55:6`, `55:50` |
 | Abas (Hoje, Explorar, Atividades, Biblioteca) | `src/app/(tabs)/` | — |
 | Admin · Conteúdos | `src/app/admin/index.tsx` | `595:3` |
@@ -167,12 +268,18 @@ e nunca persiste a senha.
 ### No código
 
 - [ ] Fazer commit do trabalho destas duas fases
-- [ ] **Criar o projeto no Firebase e preencher o `.env`** — sem isso nada do
-      painel roda de verdade (passo a passo em `docs/painel-admin.md`)
-- [ ] Publicar as regras: `firebase deploy --only firestore:rules`
-- [ ] Promover a primeira conta a `administrador` pelo Console
+- [ ] Criar a primeira conta pelo app e promovê-la a `administrador` no Console
+      (Firestore → `usuarios/{uid}` → campo `papel`)
 - [ ] Rodar no simulador e no navegador e comparar tudo com o Figma
-- [ ] Desenhar e implementar a tela **Entrar** (o cadastro já aponta para ela)
+- [ ] **Sair da conta** não existe em lugar nenhum do app. Com o cadastro
+      obrigatório, é a única forma de trocar de usuário — hoje só a tela de
+      verificação de e-mail tem "Usar outra conta". O lugar é Perfil ou
+      Preferências (`11. Protótipo`, frames 19 e 20)
+- [ ] Usar as preferências para recomendar conteúdo: nível e interesses já estão
+      no perfil, mas nada os lê ainda
+- [ ] Após entrar, voltar ao **destino solicitado** — o handoff `577:18` pede
+      "retomar destino solicitado ou Home"; hoje a rota é sempre decidida pela
+      guarda (Home ou onboarding)
 - [ ] Tela de verificação de e-mail (o cadastro já dispara o envio)
 - [ ] Cloud Function para a trava do último administrador — hoje a contagem roda
       no cliente e tem janela de corrida
@@ -190,6 +297,8 @@ e nunca persiste a senha.
 - [ ] Botão → pontinhos ainda fora do padrão (56 px na tela 01, 40 px na 02)
 - [ ] Remover o botão das telas da splash (`99:4`)
 - [ ] Atualizar a spec de movimento da splash de 2,2 s para 5 s
+- [ ] `618:18`, item 01: trocar "sem atraso artificial" por "5 s, com toque
+      para adiantar" — a splash tem duração proposital
 - [ ] Apagar o retângulo "Correção / Artefato alfa" (`108:5`)
 - [ ] O painel usa a barra de navegação administrativa em todas as telas de
       primeiro nível; o Figma mostra "← CONTEÚDOS" em `595:6` e `595:7`, o que
@@ -246,6 +355,21 @@ Sessão de 2026-09-12 com Claude Code:
 
 ### 2026-09-13
 
+- **Modo visitante removido**: "Continuar sem conta" saiu de todas as telas, o
+  cache local passou a ser separado por UID e o cache antigo é herdado sem ser
+  apagado
+- Boas-vindas (`621:18`), Verificar e-mail (`626:18`) e Acesso não autorizado
+  (`626:31`) ganharam desenho no Figma e foram sincronizadas
+- Reenvio do e-mail de verificação passou a ter espera de 60 s entre tentativas
+  ("limitar repetição", item 06)
+- Preferências do onboarding passaram a ser gravadas também no perfil do
+  Firestore
+- Contrato de navegação `618:18` implementado: Boas-vindas, verificação de
+  e-mail, retomada da etapa do onboarding e as quatro respostas do painel
+- Splash passou a valer também no painel admin (tinha ficado de fora)
+- Telas **Entrar** (`612:12`) e **Recuperar senha** (`613:14`, `613:43`)
+  desenhadas no Figma e implementadas; o handoff `577:18` ganhou as seções
+  LOGIN e RECUPERAÇÃO DE SENHA
 - Painel administrativo implementado a partir da seção `595:2`: catálogo,
   editor, revisão/publicação, agenda, usuários e alteração de permissão
 - Cadastro ligado ao Firebase Authentication, com perfil e papel no Firestore
