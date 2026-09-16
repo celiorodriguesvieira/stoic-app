@@ -3,13 +3,59 @@
 Diário para retomar o trabalho sem depender de memória. Atualize a cada sessão:
 mova o que foi feito para "Histórico" e revise "Próximos passos".
 
-**Última atualização:** 2026-09-13
+**Última atualização:** 2026-09-14 (sessão da noite de 13/09)
 **Figma:** [APP — TCC](https://www.figma.com/design/4ZvYZeKHrKGtUlSEEzedEp/APP---TCC)
-**Estado do git:** tudo abaixo está **sem commit**.
-**Verificação:** `npx tsc --noEmit` passa, `npx expo lint` não acusa nada no
-código novo e `npx expo export` gera os bundles de iOS e web (as 6 rotas de
-`/admin` aparecem na saída). As Security Rules foram testadas contra o projeto
-real (ver abaixo). **Nenhuma tela foi conferida visualmente ainda.**
+
+---
+
+## Retomar aqui
+
+**O passo que eu faria primeiro:** abrir o app e olhar. Nada do que foi
+construído nas últimas duas sessões jamais renderizou — nem o fluxo de entrada
+inteiro, nem as **seis telas do painel `/admin`**, nem o porteiro de quatro
+estados que decide quem entra nele. É muito código escrito às cegas.
+
+```bash
+cd pausa && npx expo start --web     # depois abra http://localhost:8081
+```
+
+Para ver o **primeiro acesso**, use uma aba anônima — as chaves do onboarding
+já estão gravadas no navegador. Para o painel, `http://localhost:8081/admin`
+(sua conta já é `administrador`).
+
+**Roteiro do que conferir no painel**, que nunca foi exercitado:
+
+1. Catálogo vazio → **Novo conteúdo** → preencher um nível só → Salvar rascunho
+2. "Revisar publicação" deve estar **bloqueado** até os quatro níveis
+3. Preencher os quatro → Revisar → checklist e prévia → **Publicar**
+4. Conhecimento do dia: programar uma data; repetir a data deve **perguntar**
+5. Usuários: você aparece com "SEU ACESSO" desabilitado
+
+**Depois disso**, o buraco mais óbvio: **não existe "sair da conta" no app**.
+Com cadastro obrigatório é a única forma de trocar de usuário, e hoje só a tela
+de verificação e o painel têm. O lugar é Perfil ou Preferências — desenhadas no
+protótipo (`11. Protótipo`, frames 19 e 20), nunca implementadas.
+
+### Estado do código
+
+Tudo commitado: `cca5cf5` ("Estururação do login e firebase") levou os 16
+arquivos da sessão de 13/09.
+
+**Conferido em 2026-09-15** (Chromium headless, 390 px e 1280 px, zero erros no
+console): splash, Boas-vindas, Entrar, Criar conta, Recuperar senha e o `/admin`
+sem sessão ("Entre para continuar"). **Falta** tudo que exige login — onboarding,
+abas e as seis telas do painel.
+
+As credenciais **não** vazaram: `.env` está no `.gitignore`, o `.env.example` tem
+só placeholders no commit e no staged, e a chave não aparece em commit nenhum
+(conferido com `git log -S`).
+
+**Verificação automática:** `npx tsc --noEmit` passa; `npx expo lint` só acusa um
+padrão de refs que já existia antes destas sessões; `npx expo export` gera iOS e
+web com as 26 rotas. As Security Rules foram testadas contra o projeto real
+(tabela adiante). **Nenhuma tela foi conferida visualmente.**
+
+---
 
 ## Firebase (projeto `pausa-cc7f3`)
 
@@ -203,6 +249,8 @@ do simulador).
 | Admin · Conhecimento do dia | `src/app/admin/conhecimento-do-dia.tsx` | `595:7` |
 | Admin · Usuários e permissões | `src/app/admin/usuarios/index.tsx` | `595:6` |
 | Admin · Alterar permissão | `src/app/admin/usuarios/[uid].tsx` | `595:8` |
+| Admin · Filósofos | `src/app/admin/filosofos/index.tsx` | `643:947` |
+| Admin · Novo / Editar filósofo | `src/app/admin/filosofos/[id].tsx` | `643:1215`, `643:948` |
 
 ### Componentes criados nesta fase
 
@@ -222,8 +270,9 @@ limites em [`docs/painel-admin.md`](painel-admin.md).
 | --- | --- |
 | `src/lib/perfil.ts` | Papéis, perfil no Firestore, quem pode o quê |
 | `src/lib/admin/tipos.ts` | Conteúdo, níveis, aplicação, validação de publicação |
-| `src/lib/admin/acervo.ts` | Filósofos e temas (constantes por ora) |
-| `src/lib/admin/repositorio.ts` | Firestore: catálogo, publicação, agenda, papéis, auditoria |
+| `src/lib/admin/acervo.ts` | Semente dos filósofos, temas fixos, id a partir do nome |
+| `src/lib/admin/use-filosofos.ts` | Hook que lê o acervo do Firestore nas telas |
+| `src/lib/admin/repositorio.ts` | Firestore: catálogo, publicação, agenda, filósofos, papéis, auditoria |
 | `src/components/admin/` | Casca de página, campos, estados, navegação |
 | `firestore.rules` | Autorização de verdade — o painel só esconde botões |
 
@@ -231,6 +280,16 @@ Regras que o código faz valer, do contrato:
 
 - rascunho salva incompleto, publicar exige os quatro níveis (revalidado dentro
   da transação, não só no formulário);
+- **excluir é arquivar** (2026-09-15): `arquivarConteudo` põe o status em
+  `arquivado`, o que já tira o conteúdo do app pelas Security Rules (usuário
+  comum só lê `publicado`). O catálogo esconde os arquivados atrás de "Mostrar
+  arquivados (n)" e `restaurarConteudo` devolve ao status anterior — guardado em
+  `statusAnterior` para não rebaixar a rascunho o que estava no ar. Apagar de
+  verdade continua só nas regras (`allow delete: if ehAdmin()`), sem caminho na
+  tela: apagar deixaria destaque órfão e sumiria com o histórico editorial.
+  Arquivar um conteúdo programado no Conhecimento do dia **pergunta antes** e,
+  confirmado, desmarca só as datas de hoje em diante — as passadas são registro
+  do que já foi ao ar;
 - a aplicação cotidiana é um registro só, exibido em dois caminhos;
 - a agenda guarda referência ao conteúdo, nunca cópia do texto;
 - conflito de edição por número de versão — recusa gravar sobre versão mais nova;
@@ -267,7 +326,25 @@ e nunca persiste a senha.
 
 ### No código
 
-- [ ] Fazer commit do trabalho destas duas fases
+- [ ] **Importar os filósofos**: em `/admin/filosofos`, com o acervo vazio,
+      aparece "Importar os seis do código". É isso que põe `seneca`,
+      `epicteto` e os outros quatro no Firestore com os **mesmos ids** que os
+      conteúdos já guardam em `autorId`. Sem esse passo, o seletor de filósofo
+      do editor abre vazio
+- [ ] **Atividades** (`644:95`): o contrato inteiro está desenhado e nada foi
+      implementado. Três tipos num editor condicionado, prévia, versão pública
+      preservada até republicar, registro de conclusão por tentativa
+- [ ] **Foto do filósofo**: depende de habilitar o Cloud Storage (conferir se
+      exige plano Blaze), escrever `storage.rules` e acrescentar o bloco
+      `storage` no `firebase.json`. Hoje a tela explica a ausência em vez de
+      mostrar um botão que não leva a nada
+- [ ] **Exercitar o arquivamento com sessão de verdade**: arquivar um conteúdo,
+      conferir que ele sai do catálogo, aparecer em "Mostrar arquivados",
+      restaurar e ver se volta ao status que tinha. E o caso da pergunta:
+      programar um destaque, arquivar o conteúdo e confirmar que desmarca a data
+- [ ] Publicar as `firestore.rules` de novo? **Não é preciso** — o arquivamento
+      usa `update`, que as regras já permitiam para editor; nada mudou no arquivo
+      além de comentários
 - [ ] Criar a primeira conta pelo app e promovê-la a `administrador` no Console
       (Firestore → `usuarios/{uid}` → campo `papel`)
 - [ ] Rodar no simulador e no navegador e comparar tudo com o Figma
@@ -308,6 +385,10 @@ e nunca persiste a senha.
       fonte variável
 - [ ] Os textos "Dados abaixo são exemplos" e "Exemplos editoriais" já não valem:
       os dados vêm do Firestore
+- [ ] O catálogo `595:3` só tem EDITAR em cada linha. O código passou a ter
+      ARQUIVAR (com confirmação na própria linha) e RESTAURAR, além do botão
+      "Mostrar arquivados" — desenhar isso, junto com o status "Arquivado" na
+      coluna STATUS
 
 ---
 
@@ -339,15 +420,37 @@ Sessão de 2026-09-12 com Claude Code:
 
 ---
 
-### Sessão de 2026-09-13 com Claude Code
+### Sessão de 2026-09-13/14 com Claude Code
 
-- O autor desenhou as seis telas do painel no Figma, escreveu o contrato de
-  handoff (`600:71`–`600:76`) e decidiu que o administrador é declarado
-  diretamente pelo Console do Firebase.
-- A IA leu o contrato, apontou que um seletor de papel no cadastro violaria a
-  própria regra escrita ali, implementou as telas, o modelo de dados, o acesso
-  ao Firestore e as Security Rules, e documentou o limite conhecido da trava do
-  último administrador.
+**Conduzido pelo autor:** desenhou no Figma as seis telas do painel, o contrato
+de handoff do admin (`600:71`–`600:76`), o contrato de navegação
+(`618:18`) e as telas de Login, Recuperação, Boas-vindas, Verificar e-mail e
+Acesso não autorizado. Criou o projeto no Firebase. Decidiu que o administrador
+é declarado pelo Console, que a splash dura 5 s e — revertendo a decisão de
+12/09 — que **o modo visitante seria removido**.
+
+**Feito pela IA:** implementou as telas a partir dos nós do Figma; escreveu o
+modelo de dados, o acesso ao Firestore e as Security Rules; testou as regras
+contra o projeto real; e implementou o contrato de navegação.
+
+**Onde a IA discordou ou corrigiu o rumo** (registrar isto importa para a
+seção 21 tanto quanto o que foi aceito):
+
+- apontou que um seletor "sou administrador" no cadastro violaria a regra que o
+  próprio handoff escrevia ("não confiar em campo de perfil editável pelo
+  cliente"), e a tela ficou sem ele;
+- ao remover o modo visitante, registrou três consequências que o autor
+  decidiu aceitar — coleta mínima (seção 20), efeito na nota de SUS (que é a
+  proposição P2) e a regra 5.1.1(v) da App Store;
+- descobriu que tratar falha de rede como ausência de permissão expulsaria um
+  administrador do painel por causa de conexão ruim, e separou os dois estados;
+- ao validar o parâmetro de destino do login, trocou validação por prefixo por
+  lista fechada, porque a primeira seria um redirecionador aberto.
+
+**Erros da IA nesta sessão**, também registrados: afirmou que o arquivo do Figma
+tinha uma página só, com base numa listagem incompleta da ferramenta — o autor
+corrigiu, são 11 páginas. E interpretou "primeiro acesso Onboarding depois
+sempre Home" como remoção do cadastro do fluxo, o que precisou ser revertido.
 
 ---
 

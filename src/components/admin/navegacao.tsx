@@ -6,7 +6,7 @@ import { Text } from '@/components/ui/text';
 import { useAuth } from '@/lib/auth-context';
 import { spacing } from '@/theme';
 
-export type AbaAdmin = 'conteudos' | 'conhecimento' | 'usuarios';
+export type AbaAdmin = 'conteudos' | 'conhecimento' | 'usuarios' | 'filosofos';
 
 /** Navegação administrativa do nó `596:9`. A aba atual fica preenchida. */
 export function NavegacaoAdmin({ atual }: { atual: AbaAdmin }) {
@@ -28,6 +28,14 @@ export function NavegacaoAdmin({ atual }: { atual: AbaAdmin }) {
         size="medium"
         type={atual === 'conhecimento' ? 'primary' : 'secondary'}
         onPress={() => router.replace('/admin/conhecimento-do-dia')}
+        style={styles.pilula}
+      />
+
+      <Button
+        label="FILÓSOFOS"
+        size="medium"
+        type={atual === 'filosofos' ? 'primary' : 'secondary'}
+        onPress={() => router.replace('/admin/filosofos')}
         style={styles.pilula}
       />
 

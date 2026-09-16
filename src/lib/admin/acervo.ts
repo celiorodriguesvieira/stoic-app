@@ -1,14 +1,17 @@
 import type { Filosofo, Tema } from '@/lib/admin/tipos';
 
 /**
- * Filósofos e temas disponíveis no editor.
+ * Semente do cadastro de filósofos.
  *
- * Ainda são constantes: o Figma mostra os dois campos como seletores de lista
- * fechada e não há tela de curadoria desenhada. Quando houver, viram as
- * coleções `filosofos` e `temas` no Firestore — por isso o conteúdo guarda
- * `autorId` e `temaIds`, não os nomes.
+ * Estes seis estiveram escritos no código até 2026-09-15, quando os filósofos
+ * ganharam tela própria (`643:947`) e passaram a morar no Firestore. A lista
+ * continua aqui por dois motivos: é o que a tela oferece importar num banco
+ * vazio, e é o retrato de emergência enquanto a coleção ainda não carregou.
+ *
+ * Os ids são os mesmos de antes de propósito — os conteúdos já cadastrados
+ * guardam um deles em `autorId`.
  */
-export const FILOSOFOS: readonly Filosofo[] = [
+export const SEMENTE_FILOSOFOS: readonly Pick<Filosofo, 'id' | 'nome'>[] = [
   { id: 'seneca', nome: 'Sêneca' },
   { id: 'epicteto', nome: 'Epicteto' },
   { id: 'marco-aurelio', nome: 'Marco Aurélio' },
@@ -17,6 +20,10 @@ export const FILOSOFOS: readonly Filosofo[] = [
   { id: 'nietzsche', nome: 'Nietzsche' },
 ];
 
+/**
+ * Temas continuam fixos: o Figma não desenhou curadoria de temas, e inventar
+ * uma tela para eles seria implementar o que ninguém pediu.
+ */
 export const TEMAS: readonly Tema[] = [
   { id: 'tempo-e-escolhas', nome: 'Tempo e escolhas' },
   { id: 'autoconhecimento', nome: 'Autoconhecimento' },
@@ -26,8 +33,26 @@ export const TEMAS: readonly Tema[] = [
   { id: 'juizo-e-opiniao', nome: 'Juízo e opinião' },
 ];
 
-export function nomeDoFilosofo(id: string): string {
-  return FILOSOFOS.find((filosofo) => filosofo.id === id)?.nome ?? '—';
+/**
+ * Id a partir do nome: "Marco Aurélio" vira `marco-aurelio`.
+ *
+ * Id legível em vez de sorteado porque é ele que aparece gravado em cada
+ * conteúdo — e um `autorId` que se lê ajuda a depurar o acervo à mão.
+ */
+export function idDoNome(nome: string): string {
+  return nome
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLocaleLowerCase('pt-BR')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+/** Nome do filósofo dentro de uma lista já carregada. */
+export function nomeDoFilosofoEm(filosofos: readonly Filosofo[], id: string): string {
+  return filosofos.find((filosofo) => filosofo.id === id)?.nome
+    ?? SEMENTE_FILOSOFOS.find((filosofo) => filosofo.id === id)?.nome
+    ?? '—';
 }
 
 export function nomesDosTemas(ids: string[]): string {

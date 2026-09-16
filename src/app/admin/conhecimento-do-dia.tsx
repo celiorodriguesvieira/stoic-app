@@ -7,7 +7,6 @@ import { EtiquetaAdmin, NavegacaoAdmin } from '@/components/admin/navegacao';
 import { CaixaSecao, Linha, PaginaAdmin } from '@/components/admin/pagina';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
-import { nomeDoFilosofo } from '@/lib/admin/acervo';
 import {
   observarAgenda,
   observarConteudos,
@@ -18,6 +17,7 @@ import {
   type Conteudo,
   type DestaqueAgendado,
 } from '@/lib/admin/tipos';
+import { useFilosofos } from '@/lib/admin/use-filosofos';
 import { useAuth } from '@/lib/auth-context';
 import { spacing } from '@/theme';
 
@@ -40,6 +40,7 @@ type Envio =
 
 export default function AdminConhecimentoDoDiaScreen() {
   const { user } = useAuth();
+  const { nomeDoFilosofo } = useFilosofos();
 
   const [conteudos, setConteudos] = useState<Conteudo[] | null>(null);
   const [agenda, setAgenda] = useState<DestaqueAgendado[] | null>(null);
@@ -70,7 +71,7 @@ export default function AdminConhecimentoDoDiaScreen() {
           id: conteudo.id,
           nome: `${conteudo.titulo} · ${nomeDoFilosofo(conteudo.autorId)}`,
         })),
-    [conteudos],
+    [conteudos, nomeDoFilosofo],
   );
 
   const tituloDoConteudo = (id: string) =>

@@ -25,7 +25,21 @@ export const ROTULO_FORMATO: Record<Formato, string> = {
   video: 'Vídeo',
 };
 
-export type StatusConteudo = 'rascunho' | 'publicado';
+/**
+ * `arquivado` é a exclusão do painel.
+ *
+ * Apagar de verdade deixaria destaque órfão na agenda e sumiria com o histórico
+ * editorial; arquivar tira o conteúdo do app e do catálogo sem perder o
+ * registro, e volta atrás. As Security Rules já escondem de quem não é da
+ * redação: só `publicado` é legível por usuário comum.
+ */
+export type StatusConteudo = 'rascunho' | 'publicado' | 'arquivado';
+
+export const ROTULO_STATUS: Record<StatusConteudo, string> = {
+  rascunho: 'Rascunho',
+  publicado: 'Publicado',
+  arquivado: 'Arquivado',
+};
 
 /** Texto por nível. Vazio significa "ainda não escrito". */
 export type TextoPorNivel = Record<Nivel, string>;
@@ -126,6 +140,45 @@ export type DestaqueAgendado = {
 
 export const FUSO_EDITORIAL_PADRAO = 'America/Sao_Paulo';
 
-/** Filósofos e temas do acervo. Viram coleções no Firestore quando houver curadoria. */
-export type Filosofo = { id: string; nome: string };
+/**
+ * Filósofo — cadastro próprio desde 2026-09-15 (nós `643:947`, `643:948`,
+ * `643:1215`). Deixou de ser constante no código e virou coleção no Firestore.
+ *
+ * O `id` continua sendo o mesmo texto de antes (`seneca`, `marco-aurelio`…):
+ * é ele que os conteúdos já cadastrados guardam em `autorId`, e trocá-lo
+ * deixaria cada conteúdo sem autor.
+ */
+export type Filosofo = {
+  id: string;
+  nome: string;
+  biografia: string;
+  /**
+   * Endereço da foto. Nulo enquanto não houver upload — o contrato `643:1269`
+   * diz que sem foto o app mostra a inicial do nome.
+   */
+  fotoUrl: string | null;
+  atualizadoEm: number;
+};
+
+/** O que o formulário edita. Id, foto e data são do repositório. */
+export type RascunhoFilosofo = Pick<Filosofo, 'nome' | 'biografia'>;
+
+export function filosofoVazio(): RascunhoFilosofo {
+  return { nome: '', biografia: '' };
+}
+
+/** Nome é obrigatório e não pode ser só espaço em branco (contrato `643:1269`). */
+export function pendenciasDoFilosofo(rascunho: RascunhoFilosofo): string[] {
+  const pendencias: string[] = [];
+
+  if (!rascunho.nome.trim()) pendencias.push('Informe o nome do filósofo.');
+
+  return pendencias;
+}
+
+/** Inicial exibida no lugar da foto. Uma letra, maiúscula. */
+export function inicialDoNome(nome: string): string {
+  return nome.trim().charAt(0).toLocaleUpperCase('pt-BR') || '?';
+}
+
 export type Tema = { id: string; nome: string };

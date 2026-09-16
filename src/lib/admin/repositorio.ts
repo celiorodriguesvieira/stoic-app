@@ -1,6 +1,7 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -11,25 +12,33 @@ import {
   serverTimestamp,
   setDoc,
   Timestamp,
+  updateDoc,
   where,
+  writeBatch,
   type DocumentData,
 } from 'firebase/firestore';
 
 import { db, requireDb } from '@/lib/firebase';
+import { idDoNome, SEMENTE_FILOSOFOS } from '@/lib/admin/acervo';
 import { PAPEL_PADRAO, type Papel, type PerfilUsuario } from '@/lib/perfil';
 import {
   aplicacaoVazia,
   textoPorNivelVazio,
   type Conteudo,
   type DestaqueAgendado,
+  type Filosofo,
   type Formato,
   type RascunhoConteudo,
+  type RascunhoFilosofo,
   type StatusConteudo,
   type TextoPorNivel,
+  FUSO_EDITORIAL_PADRAO,
+  pendenciasDoFilosofo,
   pendenciasParaPublicar,
 } from '@/lib/admin/tipos';
 
 const CONTEUDOS = 'conteudos';
+const FILOSOFOS = 'filosofos';
 const AGENDA = 'agenda';
 const USUARIOS = 'usuarios';
 const AUDITORIA = 'auditoria';
@@ -47,6 +56,19 @@ export class ErroDeRegra extends Error {
   constructor(mensagem: string) {
     super(mensagem);
     this.name = 'ErroDeRegra';
+  }
+}
+
+/**
+ * Não é recusa: é pergunta. A operação segue se o chamador insistir de propósito.
+ *
+ * Tem classe própria para a tela reconhecer o caso sem ler o texto da mensagem —
+ * comparar strings quebraria calado na primeira vez que a frase mudasse.
+ */
+export class ErroPedeConfirmacao extends ErroDeRegra {
+  constructor(mensagem: string) {
+    super(mensagem);
+    this.name = 'ErroPedeConfirmacao';
   }
 }
 
@@ -233,6 +255,9 @@ export async function publicarConteudo(
 
     transacao.update(referencia, {
       status: 'publicado' satisfies StatusConteudo,
+      // Publicar também desfaz um arquivamento: o destino de "restaurar" já
+      // não vale, e deixá-lo gravado seria guardar uma volta que não existe.
+      statusAnterior: null,
       versao: conteudo.versao + 1,
       publicadoPor: autorUid,
       publicadoEm: serverTimestamp(),
@@ -241,7 +266,139 @@ export async function publicarConteudo(
   });
 }
 
+/**
+ * Arquiva — a "exclusão" do painel.
+ *
+ * Apagar o documento deixaria a agenda apontando para um registro que sumiu e
+ * levaria junto o histórico editorial. Arquivar tira o conteúdo do catálogo e
+ * do app (as regras só deixam usuário comum ler `publicado`) e dá para desfazer.
+ *
+ * Recusa enquanto houver destaque programado de hoje em diante, a menos que
+ * `removerDestaques` seja verdadeiro — o mesmo padrão de "data ocupada vira
+ * pergunta, não erro" de `programarDestaque`. Destaque passado fica: é registro
+ * do que já foi ao ar, e reescrever o passado seria mentir sobre ele.
+ */
+export async function arquivarConteudo(
+  id: string,
+  versaoEsperada: number,
+  autorUid: string,
+  removerDestaques = false,
+): Promise<void> {
+  const banco = requireDb();
+
+  const agendados = await getDocs(
+    query(collection(banco, AGENDA), where('conteudoId', '==', id)),
+  );
+
+  // Filtra a data em memória de propósito: igualdade num campo com faixa em
+  // outro exigiria índice composto no Firestore, e a agenda é pequena.
+  const hoje = hojeEditorial();
+  const futuros = agendados.docs.filter((d) => texto(d.data().data) >= hoje);
+
+  if (futuros.length > 0 && !removerDestaques) {
+    const datas = futuros
+      .map((d) => texto(d.data().data))
+      .sort()
+      .join(', ');
+
+    throw new ErroPedeConfirmacao(
+      `Este conteúdo está programado no Conhecimento do dia em ${datas}. Arquivar vai desmarcar ${futuros.length === 1 ? 'essa data' : 'essas datas'}.`,
+    );
+  }
+
+  const referencia = doc(banco, CONTEUDOS, id);
+
+  await runTransaction(banco, async (transacao) => {
+    const atual = await transacao.get(referencia);
+
+    if (!atual.exists()) {
+      throw new ErroDeRegra('Este conteúdo não existe mais.');
+    }
+
+    const conteudo = paraConteudo(atual.id, atual.data());
+
+    if (conteudo.versao !== versaoEsperada) {
+      throw new ErroDeConflito();
+    }
+
+    if (conteudo.status === 'arquivado') {
+      throw new ErroDeRegra('Este conteúdo já está arquivado.');
+    }
+
+    transacao.update(referencia, {
+      status: 'arquivado' satisfies StatusConteudo,
+      // Guarda de onde veio para que restaurar devolva ao mesmo lugar.
+      statusAnterior: conteudo.status,
+      versao: conteudo.versao + 1,
+      arquivadoPor: autorUid,
+      arquivadoEm: serverTimestamp(),
+      atualizadoEm: serverTimestamp(),
+    });
+  });
+
+  // Só depois de arquivar de fato: se a transação falhar, a agenda fica intacta.
+  for (const destaque of futuros) {
+    await deleteDoc(doc(banco, AGENDA, destaque.id));
+  }
+}
+
+/**
+ * Desfaz o arquivamento, devolvendo o conteúdo ao status que tinha antes.
+ *
+ * Voltar ao que era evita dois enganos: rebaixar a rascunho algo que estava no
+ * ar (e sumir com ele sem querer) e republicar sozinho o que era rascunho.
+ */
+export async function restaurarConteudo(
+  id: string,
+  versaoEsperada: number,
+  autorUid: string,
+): Promise<StatusConteudo> {
+  const referencia = doc(requireDb(), CONTEUDOS, id);
+
+  return runTransaction(requireDb(), async (transacao) => {
+    const atual = await transacao.get(referencia);
+
+    if (!atual.exists()) {
+      throw new ErroDeRegra('Este conteúdo não existe mais.');
+    }
+
+    const conteudo = paraConteudo(atual.id, atual.data());
+
+    if (conteudo.versao !== versaoEsperada) {
+      throw new ErroDeConflito();
+    }
+
+    if (conteudo.status !== 'arquivado') {
+      throw new ErroDeRegra('Este conteúdo não está arquivado.');
+    }
+
+    const anterior = texto(atual.data().statusAnterior);
+    const destino: StatusConteudo = anterior === 'publicado' ? 'publicado' : 'rascunho';
+
+    transacao.update(referencia, {
+      status: destino,
+      statusAnterior: null,
+      versao: conteudo.versao + 1,
+      restauradoPor: autorUid,
+      restauradoEm: serverTimestamp(),
+      atualizadoEm: serverTimestamp(),
+    });
+
+    return destino;
+  });
+}
+
 // --- Conhecimento do dia -----------------------------------------------------
+
+/** Hoje no fuso editorial, como `AAAA-MM-DD` — o mesmo formato da agenda. */
+function hojeEditorial(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: FUSO_EDITORIAL_PADRAO,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+}
 
 function paraDestaque(id: string, dados: DocumentData): DestaqueAgendado {
   return {
@@ -313,6 +470,121 @@ export async function programarDestaque(
   }
 
   await addDoc(collection(banco, AGENDA), payload);
+}
+
+// --- Filósofos ---------------------------------------------------------------
+
+function paraFilosofo(id: string, dados: DocumentData): Filosofo {
+  return {
+    id,
+    nome: texto(dados.nome),
+    biografia: texto(dados.biografia),
+    fotoUrl: texto(dados.fotoUrl) || null,
+    atualizadoEm: millis(dados.atualizadoEm),
+  };
+}
+
+/** Lista o acervo em ordem alfabética — é assim que a tela `643:947` mostra. */
+export function observarFilosofos(
+  aoMudar: (filosofos: Filosofo[]) => void,
+  aoFalhar: (erro: Error) => void,
+): () => void {
+  return assinar(aoFalhar, (banco) =>
+    onSnapshot(
+      query(collection(banco, FILOSOFOS), orderBy('nome')),
+      (instantaneo) => aoMudar(instantaneo.docs.map((d) => paraFilosofo(d.id, d.data()))),
+      aoFalhar,
+    ),
+  );
+}
+
+/**
+ * Cadastra um filósofo. O id vem do nome, não é sorteado.
+ *
+ * Recusa se o id já existir: dois "Sêneca" gravariam um por cima do outro e o
+ * segundo levaria junto os conteúdos do primeiro.
+ */
+export async function criarFilosofo(rascunho: RascunhoFilosofo): Promise<string> {
+  const pendencias = pendenciasDoFilosofo(rascunho);
+  if (pendencias.length > 0) {
+    throw new ErroDeRegra(pendencias.join(' '));
+  }
+
+  const banco = requireDb();
+  const id = idDoNome(rascunho.nome);
+
+  if (!id) {
+    throw new ErroDeRegra('Este nome não gera um identificador válido. Use letras ou números.');
+  }
+
+  const referencia = doc(banco, FILOSOFOS, id);
+
+  if ((await getDoc(referencia)).exists()) {
+    throw new ErroDeRegra(`Já existe um filósofo cadastrado como “${rascunho.nome.trim()}”.`);
+  }
+
+  await setDoc(referencia, {
+    nome: rascunho.nome.trim(),
+    biografia: rascunho.biografia.trim(),
+    fotoUrl: null,
+    atualizadoEm: serverTimestamp(),
+  });
+
+  return id;
+}
+
+/**
+ * Atualiza nome e biografia. O id fica como está, mesmo que o nome mude: é
+ * ele que os conteúdos guardam, e renomear não pode quebrar esse vínculo.
+ */
+export async function salvarFilosofo(id: string, rascunho: RascunhoFilosofo): Promise<void> {
+  const pendencias = pendenciasDoFilosofo(rascunho);
+  if (pendencias.length > 0) {
+    throw new ErroDeRegra(pendencias.join(' '));
+  }
+
+  const banco = requireDb();
+  const referencia = doc(banco, FILOSOFOS, id);
+
+  if (!(await getDoc(referencia)).exists()) {
+    throw new ErroDeRegra('Este filósofo não existe mais.');
+  }
+
+  await updateDoc(referencia, {
+    nome: rascunho.nome.trim(),
+    biografia: rascunho.biografia.trim(),
+    atualizadoEm: serverTimestamp(),
+  });
+}
+
+/**
+ * Importa para o Firestore os filósofos que viviam no código.
+ *
+ * Só grava quem ainda não existe, então rodar duas vezes não desfaz edição
+ * nenhuma. Devolve quantos entraram.
+ */
+export async function semearFilosofos(): Promise<number> {
+  const banco = requireDb();
+  const lote = writeBatch(banco);
+  let novos = 0;
+
+  for (const semente of SEMENTE_FILOSOFOS) {
+    const referencia = doc(banco, FILOSOFOS, semente.id);
+
+    if ((await getDoc(referencia)).exists()) continue;
+
+    lote.set(referencia, {
+      nome: semente.nome,
+      biografia: '',
+      fotoUrl: null,
+      atualizadoEm: serverTimestamp(),
+    });
+    novos += 1;
+  }
+
+  if (novos > 0) await lote.commit();
+
+  return novos;
 }
 
 // --- Usuários e permissões ---------------------------------------------------

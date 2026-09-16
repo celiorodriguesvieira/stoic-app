@@ -62,12 +62,30 @@ service cloud.firestore {
 
     // --- Conteúdos ---------------------------------------------------------
     match /conteudos/{id} {
-      // Qualquer pessoa autenticada lê o que está publicado; rascunho é da redação.
+      // Qualquer pessoa autenticada lê o que está publicado; rascunho e
+      // arquivado são da redação. É esta linha que tira do app o que foi
+      // arquivado no painel — a tela não é a barreira.
       allow read: if autenticado() && (resource.data.status == 'publicado' || ehEditor());
 
       allow create, update: if ehEditor();
 
+      // Arquivar é `update`, não `delete`: apagar de verdade continua sendo só
+      // do administrador, e o painel não oferece esse caminho.
       allow delete: if ehAdmin();
+    }
+
+    // --- Filósofos ---------------------------------------------------------
+    match /filosofos/{id} {
+      // O app inteiro mostra nome e foto do filósofo nos cards: leitura é de
+      // qualquer pessoa autenticada, não só da redação.
+      allow read: if autenticado();
+
+      allow create, update: if ehEditor();
+
+      // Apagar deixaria cada conteúdo daquele autor sem identidade. Se algum
+      // dia precisar sair de circulação, será pelo mesmo caminho do conteúdo:
+      // arquivar, não apagar.
+      allow delete: if false;
     }
 
     // --- Conhecimento do dia ----------------------------------------------

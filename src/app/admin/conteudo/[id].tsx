@@ -8,7 +8,7 @@ import { BotaoVoltar } from '@/components/admin/navegacao';
 import { CaixaSecao, Linha, PaginaAdmin } from '@/components/admin/pagina';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
-import { FILOSOFOS, TEMAS } from '@/lib/admin/acervo';
+import { TEMAS } from '@/lib/admin/acervo';
 import {
   criarConteudo,
   ErroDeConflito,
@@ -23,9 +23,12 @@ import {
   pendenciasParaPublicar,
   ROTULO_FORMATO,
   ROTULO_NIVEL,
+  ROTULO_STATUS,
   type Nivel,
   type RascunhoConteudo,
+  type StatusConteudo,
 } from '@/lib/admin/tipos';
+import { useFilosofos } from '@/lib/admin/use-filosofos';
 import { useAuth } from '@/lib/auth-context';
 import { spacing } from '@/theme';
 
@@ -44,12 +47,13 @@ export default function AdminEditorScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
+  const { opcoes: opcoesDeFilosofo } = useFilosofos();
 
   const criando = id === 'novo';
 
   const [rascunho, setRascunho] = useState<RascunhoConteudo>(conteudoVazio);
   const [nivel, setNivel] = useState<Nivel>('leigo');
-  const [publicado, setPublicado] = useState(false);
+  const [status, setStatus] = useState<StatusConteudo>('rascunho');
   const [carregando, setCarregando] = useState(!criando);
   const [erroDeCarga, setErroDeCarga] = useState<string | null>(null);
   const [gravacao, setGravacao] = useState<Gravacao>({ estado: 'ocioso' });
@@ -89,7 +93,7 @@ export default function AdminEditorScreen() {
             textos: conteudo.textos,
             aplicacao: conteudo.aplicacao,
           });
-          setPublicado(conteudo.status === 'publicado');
+          setStatus(conteudo.status);
           return;
         }
 
@@ -198,7 +202,7 @@ export default function AdminEditorScreen() {
   return (
     <PaginaAdmin
       titulo={criando && !idAtual ? 'NOVO CONTEÚDO' : 'EDITAR CONTEÚDO'}
-      apoio={`${publicado ? 'Publicado' : 'Rascunho'}${rascunho.titulo ? ` • ${rascunho.titulo}` : ''}`}
+      apoio={`${ROTULO_STATUS[status]}${rascunho.titulo ? ` • ${rascunho.titulo}` : ''}`}
       topo={<BotaoVoltar rotulo="← CONTEÚDOS" aoVoltar={() => router.replace('/admin')} />}>
       {conflito ? (
         <ErroRecuperavel
@@ -224,7 +228,7 @@ export default function AdminEditorScreen() {
           <View style={styles.metade}>
             <CampoSelecao
               rotulo="Filósofo"
-              opcoes={FILOSOFOS}
+              opcoes={opcoesDeFilosofo}
               valor={rascunho.autorId}
               aoEscolher={(valor) => alterar('autorId', valor)}
               vazio="Escolher filósofo"

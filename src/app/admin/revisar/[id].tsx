@@ -7,7 +7,7 @@ import { BotaoVoltar } from '@/components/admin/navegacao';
 import { CaixaSecao, Linha, PaginaAdmin } from '@/components/admin/pagina';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
-import { nomeDoFilosofo, nomesDosTemas } from '@/lib/admin/acervo';
+import { nomesDosTemas } from '@/lib/admin/acervo';
 import { observarConteudo, publicarConteudo } from '@/lib/admin/repositorio';
 import {
   aplicacaoVinculada,
@@ -17,6 +17,7 @@ import {
   type Conteudo,
   type Nivel,
 } from '@/lib/admin/tipos';
+import { useFilosofos } from '@/lib/admin/use-filosofos';
 import { useAuth } from '@/lib/auth-context';
 import { radius, spacing } from '@/theme';
 
@@ -194,6 +195,10 @@ function Item({ ok, rotulo }: { ok: boolean; rotulo: string }) {
 
 /** Como o conteúdo vai aparecer no app, no nível escolhido. */
 function Previa({ conteudo, nivel }: { conteudo: Conteudo; nivel: Nivel }) {
+  // O acervo é lido aqui, e não recebido por propriedade, porque a prévia é a
+  // única parte desta tela que precisa do nome do autor.
+  const { nomeDoFilosofo } = useFilosofos();
+
   const texto = conteudo.textos[nivel].trim();
   const aplicacao = conteudo.aplicacao.textos[nivel].trim();
 
