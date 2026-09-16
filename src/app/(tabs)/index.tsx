@@ -5,6 +5,7 @@ import { CardAutorDestaque } from '@/components/cards/autor-destaque';
 import { CardFilosofoHorizontal } from '@/components/cards/filosofo-horizontal';
 import { CardMensagemSemanal } from '@/components/cards/mensagem-semanal';
 import { CardTemaDestaque } from '@/components/cards/tema-destaque';
+import { CabecalhoApp } from '@/components/ui/cabecalho-app';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
 import { spacing } from '@/theme';
@@ -42,12 +43,7 @@ export default function HojeScreen() {
       <ScrollView
         contentContainerStyle={styles.conteudo}
         showsVerticalScrollIndicator={false}>
-        <View style={styles.cabecalho}>
-          <Text variant="headingLarge">Hoje</Text>
-          <Text variant="bodySmall" color="textSecondary">
-            Uma pausa por dia.
-          </Text>
-        </View>
+        <CabecalhoApp titulo="Hoje" apoio="Uma pausa por dia." />
 
         <CardMensagemSemanal {...MENSAGEM_SEMANAL} />
 
@@ -96,9 +92,6 @@ const styles = StyleSheet.create({
     paddingTop: spacing['2xl'],
     paddingBottom: spacing['4xl'],
     gap: spacing['3xl'],
-  },
-  cabecalho: {
-    gap: spacing.xs,
   },
   secao: {
     gap: spacing.lg,

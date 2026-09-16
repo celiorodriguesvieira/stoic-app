@@ -77,6 +77,14 @@ type AuthState = {
   /** Mensagem da falha ao ler o perfil, quando houver. */
   erroDePerfil: string | null;
 
+  /**
+   * `false` enquanto a primeira leitura do perfil não voltou — por sucesso ou
+   * por erro. Quem decide rota precisa disso: sem perfil ainda lido, "não tem
+   * preferências" é indistinguível de "ainda não sei", e as duas coisas levam a
+   * telas diferentes.
+   */
+  perfilCarregado: boolean;
+
   /** Cadastro feito e verificação de e-mail ainda não confirmada. */
   verificacaoPendente: boolean;
 
@@ -111,6 +119,7 @@ const AuthContext = createContext<AuthState>({
   podeAdministrar: false,
   papelIndefinido: true,
   erroDePerfil: null,
+  perfilCarregado: false,
   verificacaoPendente: false,
   reenviarVerificacao: async () => {},
   concluirVerificacao: async () => {},
@@ -221,6 +230,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const erroDePerfil = leitura.estado === 'erro' ? leitura.mensagem : null;
 
+  // Sem usuário não há perfil a esperar; com bypass não há leitura nenhuma.
+  const perfilCarregado = authBypass || user === null || leitura.estado !== 'carregando';
+
   // A pendência só vale para a conta que está logada agora.
   const verificacaoPendente =
     user !== null && uidVerificando === user.uid && !user.emailVerified;
@@ -237,6 +249,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       podeAdministrar: podeGerenciarUsuarios(papel),
       papelIndefinido,
       erroDePerfil,
+      perfilCarregado,
       verificacaoPendente,
       reenviarVerificacao,
       concluirVerificacao,
@@ -253,6 +266,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       papel,
       papelIndefinido,
       erroDePerfil,
+      perfilCarregado,
       verificacaoPendente,
       reenviarVerificacao,
       concluirVerificacao,

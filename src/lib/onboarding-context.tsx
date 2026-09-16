@@ -146,14 +146,39 @@ async function carregar(uid: string | null): Promise<Estado> {
 
 export function OnboardingProvider({ children }: { children: ReactNode }) {
   // O provedor de autenticação envolve este, então `user` já está disponível.
-  const { user, perfil } = useAuth();
+  const { user, perfil, perfilCarregado } = useAuth();
   const uid = user?.uid ?? null;
 
   const [estado, setEstado] = useState<Estado | null>(null);
 
+  /**
+   * Preferências gravadas no perfil provam que o onboarding foi concluído.
+   *
+   * Antes, só o AsyncStorage respondia por isso — e o aparelho é justamente o
+   * que não acompanha a pessoa. Entrar noutro navegador, numa aba anônima ou
+   * depois de limpar os dados do site fazia o app pedir o onboarding de novo,
+   * com as respostas já salvas no banco. Era a promessa do cadastro
+   * ("continue de onde parou em outros aparelhos") sendo quebrada.
+   */
+  const preferenciasNoPerfil =
+    !!uid &&
+    perfil?.uid === uid &&
+    !!perfil.preferencias &&
+    (perfil.preferencias.nivel !== null || perfil.preferencias.interesses.length > 0);
+
   // Enquanto o estado carregado não for o do usuário atual, ainda é "carregando" —
   // é o que impede a rota de ser decidida com o onboarding de outra sessão.
-  const initializing = estado === null || estado.uid !== uid;
+  const localPronto = estado !== null && estado.uid === uid;
+
+  /*
+    Quando o aparelho diz "não concluído", a resposta ainda não está fechada: o
+    perfil pode dizer que sim. Esperar a leitura evita mandar para o onboarding
+    quem já o fez — e evita o pisca-pisca de ir e voltar.
+  */
+  const initializing =
+    !localPronto || (uid !== null && !estado?.onboardingDone && !perfilCarregado);
+
+  const concluido = (estado?.onboardingDone ?? false) || preferenciasNoPerfil;
 
   useEffect(() => {
     let vivo = true;
@@ -204,6 +229,26 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
       });
   }, [uid, perfil]);
 
+  /**
+   * Caminho inverso do efeito acima: o perfil prova que o onboarding foi feito,
+   * mas este aparelho não sabe. Anota a marca local para que a próxima abertura
+   * não precise da rede para decidir a rota.
+   */
+  const marcadoLocalmente = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!uid || !preferenciasNoPerfil) return;
+    if (estado?.uid !== uid || estado.onboardingDone) return;
+    if (marcadoLocalmente.current === uid) return;
+
+    marcadoLocalmente.current = uid;
+
+    AsyncStorage.setItem(chave(uid, CONCLUIDO), 'true').catch(() => {
+      // Sem a marca, a decisão continua saindo do perfil na próxima entrada.
+      marcadoLocalmente.current = null;
+    });
+  }, [uid, preferenciasNoPerfil, estado]);
+
   // Grava sem bloquear a interação: perder o último passo é aceitável, travar não.
   const salvarParcial = useCallback(
     (proximo: ParcialOnboarding) => {
@@ -250,12 +295,12 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
   const value = useMemo<OnboardingState>(
     () => ({
       initializing,
-      onboardingDone: estado?.onboardingDone ?? false,
+      onboardingDone: concluido,
       parcial: estado?.parcial ?? null,
       salvarParcial,
       finishOnboarding,
     }),
-    [initializing, estado, salvarParcial, finishOnboarding],
+    [initializing, concluido, estado, salvarParcial, finishOnboarding],
   );
 
   return <OnboardingContext.Provider value={value}>{children}</OnboardingContext.Provider>;

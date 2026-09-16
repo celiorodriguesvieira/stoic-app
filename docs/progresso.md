@@ -84,6 +84,16 @@ Sem isso, a promessa do cadastro ("continue de onde parou em outros aparelhos")
 não se cumpriria, e não haveria como cruzar perfil com desempenho na avaliação
 de **P1**.
 
+**Corrigido em 2026-09-15 — o onboarding reaparecia a cada login.** A conclusão
+era decidida só pelo `AsyncStorage`, que é justamente o que não acompanha a
+pessoa: em outro navegador, aba anônima ou depois de limpar os dados do site, o
+app pedia tudo de novo com as respostas já salvas no Firestore. Agora
+`usuarios/{uid}.preferencias` também vale como prova de conclusão, o
+`OnboardingProvider` espera a leitura do perfil antes de mandar alguém para o
+onboarding (`perfilCarregado`, novo no `auth-context`) e, quando o perfil prova
+a conclusão, a marca local é regravada para a abertura seguinte não depender de
+rede.
+
 ### Regras verificadas contra o backend real
 
 Feito com uma conta de teste (criada e removida em seguida), via REST:
@@ -186,6 +196,21 @@ do simulador).
 
 ## Decisões tomadas
 
+- **O app é só claro** (2026-09-15). Item 04 do contrato do menu (`649:987`):
+  "somente tema claro, independentemente da aparência do aparelho". Até aqui o
+  app seguia o sistema e escurecia com cores que a IA escolheu no código —
+  nenhuma tela escura foi desenhada. `useTheme` passou a devolver sempre o modo
+  claro; os valores escuros continuam em `tokens.ts` à espera de desenho, e os
+  hooks `use-color-scheme` foram removidos por terem ficado sem uso.
+- **O link do painel usa o `papel` do Firestore, não custom claim.** O item 08
+  do `649:987` pede `role === "admin"` no token, atribuída pelo Admin SDK — que
+  exigiria Cloud Functions (e provavelmente plano Blaze). O projeto inteiro já
+  autoriza pelo `usuarios/{uid}.papel`, com as regras impedindo autopromoção.
+  Vale corrigir o texto do contrato no Figma.
+- **Editar o nome acontece dentro do menu**, não numa tela de perfil. O item 12
+  manda preservar o contexto de origem e não existe tela de perfil desenhada —
+  inventar uma rota seria pior do que editar ali mesmo.
+
 - **A splash dura 5 s, e isso prevalece sobre o contrato.** O item 01 do
   `618:18` diz "sem atraso artificial", mas os 5 s existem para dar tempo de ler
   a citação — decisão do autor em 2026-09-12, reafirmada em 2026-09-13. Vale
@@ -251,6 +276,11 @@ do simulador).
 | Admin · Alterar permissão | `src/app/admin/usuarios/[uid].tsx` | `595:8` |
 | Admin · Filósofos | `src/app/admin/filosofos/index.tsx` | `643:947` |
 | Admin · Novo / Editar filósofo | `src/app/admin/filosofos/[id].tsx` | `643:1215`, `643:948` |
+| Menu "Seu espaço" | `src/components/ui/menu-seu-espaco.tsx` | `645:977`, `649:987` |
+| Cabeçalho com hambúrguer | `src/components/ui/cabecalho-app.tsx` | `649:987`, item 14 |
+| Seu perfil | `src/app/perfil/index.tsx` | `508:836` |
+| Seu avatar | `src/app/perfil/avatar.tsx` | `511:1045` |
+| Preferências | `src/app/preferencias.tsx` | `506:1063` |
 
 ### Componentes criados nesta fase
 
@@ -326,6 +356,17 @@ e nunca persiste a senha.
 
 ### No código
 
+- [ ] **Os interruptores de Preferências só guardam a escolha.** "Conhecimento
+      do dia" não muda a Home; "Reduzir animações" e "Texto ampliado" não
+      alteram a renderização. Ficam no aparelho, por conta (`pausa:{uid}:
+      preferencias-app`). O desenho de 15/09 **removeu "Lembretes"**, que era o
+      único item a exigir permissão de notificação
+- [ ] **"Temas de interesse" não navega**: o desenho tem a seta, mas não existe
+      tela de edição de interesses. Hoje a linha só mostra o que foi escolhido
+      no onboarding
+- [ ] **Foco preso no menu** (item 06): o React Native não tem captura de foco
+      nativa. Escape, X, toque fora e Voltar fecham, mas Tab ainda escapa do
+      painel na web
 - [ ] **Importar os filósofos**: em `/admin/filosofos`, com o acervo vazio,
       aparece "Importar os seis do código". É isso que põe `seneca`,
       `epicteto` e os outros quatro no Firestore com os **mesmos ids** que os

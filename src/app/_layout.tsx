@@ -20,8 +20,6 @@ import { OnboardingProvider, useOnboarding } from '@/lib/onboarding-context';
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  const { mode } = useTheme();
-
   const [fontsLoaded, fontError] = useFonts({
     PixelifySans_400Regular,
     PixelifySans_500Medium,
@@ -39,7 +37,8 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <OnboardingProvider>
-        <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
+        {/* Conteúdo escuro sobre fundo claro: o app é só claro (item 04 do `649:987`). */}
+        <StatusBar style="dark" />
         <RootNavigator />
       </OnboardingProvider>
     </AuthProvider>
@@ -91,6 +90,9 @@ function RootNavigator() {
           */}
           <Stack.Protected guard={isSignedIn && !verificacaoPendente && onboardingDone}>
             <Stack.Screen name="(tabs)" />
+            {/* Telas abertas pelo menu "Seu espaço" — exigem conta, como ele. */}
+            <Stack.Screen name="perfil" />
+            <Stack.Screen name="preferencias" />
           </Stack.Protected>
 
           <Stack.Protected guard={isSignedIn && !verificacaoPendente && !onboardingDone}>

@@ -47,6 +47,8 @@ export type PerfilUsuario = {
   nome: string;
   email: string;
   papel: Papel;
+  /** Avatar do acervo (item 07 do `649:987`). `null` = inicial do nome. */
+  avatarId: string | null;
   preferencias: PreferenciasPerfil | null;
 };
 
@@ -145,6 +147,30 @@ export async function salvarPreferencias(
   );
 }
 
+/**
+ * Grava nome e avatar juntos (itens 02 e 07 do contrato do menu, `649:987`).
+ *
+ * "Salvar alterações persiste avatarId junto com o nome; Cancelar descarta
+ * ambos" — por isso uma gravação só, e não duas que poderiam deixar metade da
+ * edição salva se a segunda falhasse.
+ *
+ * `merge: true` pelo mesmo motivo de `salvarPreferencias`: tocar só estes
+ * campos é o que as regras exigem para a própria pessoa escrever no seu
+ * documento — mandar o papel junto seria recusado.
+ */
+export async function salvarIdentidade(
+  uid: string,
+  identidade: { nome: string; avatarId: string | null },
+): Promise<void> {
+  if (!db) return;
+
+  await setDoc(
+    doc(db, COLECAO, uid),
+    { nome: identidade.nome.trim(), avatarId: identidade.avatarId },
+    { merge: true },
+  );
+}
+
 /** Observa o perfil do UID, distinguindo "ainda não sei" de "não tem". */
 export function observarPerfil(
   uid: string,
@@ -175,6 +201,7 @@ export function observarPerfil(
           email: typeof dados.email === 'string' ? dados.email : '',
           // Papel desconhecido ou ausente cai no mais restrito, nunca no mais permissivo.
           papel: ehPapel(dados.papel) ? dados.papel : PAPEL_PADRAO,
+          avatarId: typeof dados.avatarId === 'string' ? dados.avatarId : null,
           preferencias: lerPreferencias(dados.preferencias),
         },
       });
