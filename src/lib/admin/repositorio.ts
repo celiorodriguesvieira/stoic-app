@@ -19,22 +19,36 @@ import {
 } from 'firebase/firestore';
 
 import { db, requireDb } from '@/lib/firebase';
+import { retratoDoAcervo } from '@/lib/retratos';
 import { idDoNome, SEMENTE_FILOSOFOS } from '@/lib/admin/acervo';
 import { PAPEL_PADRAO, type Papel, type PerfilUsuario } from '@/lib/perfil';
 import {
   aplicacaoVazia,
   textoPorNivelVazio,
   type Conteudo,
-  type DestaqueAgendado,
+  type EdicaoSemanal,
   type Filosofo,
   type Formato,
   type RascunhoConteudo,
   type RascunhoFilosofo,
+  type DadosDaAula,
+  type EtapasDaAula,
+  type ModoFonte,
+  type OpcaoReflexao,
   type StatusConteudo,
   type TextoPorNivel,
+  type TipoConteudo,
+  aulaVazia,
+  etapasVazias,
+  fimDaEdicao,
   FUSO_EDITORIAL_PADRAO,
+  pendenciasDaEdicao,
+  periodoParaExibicao,
   pendenciasDoFilosofo,
   pendenciasParaPublicar,
+  periodosSeSobrepoem,
+  MODOS_FONTE,
+  TIPOS_CONTEUDO,
 } from '@/lib/admin/tipos';
 
 const CONTEUDOS = 'conteudos';
@@ -76,25 +90,80 @@ const SEM_FIREBASE =
   'Firebase não configurado. Preencha o .env com as credenciais do projeto (ver docs/painel-admin.md).';
 
 /**
+ * Erro do Firestore em português.
+ *
+ * O SDK devolve a mensagem em inglês ("Missing or insufficient permissions"),
+ * que apareceu crua na tela. As classes de erro são as do contrato `668:181`
+ * — 401 sessão expirada, 403 sem permissão, 503 falha temporária —, e o texto
+ * segue o padrão dos que o Figma escreve por extenso (`598:77`, `650:981`):
+ * curto, em português, dizendo o que houve.
+ *
+ * A pista de diagnóstico vai para o console, não para a tela: mandar alguém
+ * rodar `firebase deploy` é instrução de desenvolvedor, e ela não pertence à
+ * interface do produto. Em 16/09 essa dica estava no lugar errado.
+ */
+/**
+ * Mensagem já traduzida, para as telas não repetirem `instanceof` em cada
+ * `catch`.
+ *
+ * Os erros próprios (`ErroDeRegra`, `ErroDeConflito`, `ErroPedeConfirmacao`)
+ * atravessam sem alteração: não têm `code` do SDK e já nascem em português.
+ */
+export function mensagemDeErro(falha: unknown, padrao: string): string {
+  return traduzirErro(falha instanceof Error ? falha : new Error(padrao)).message;
+}
+
+export function traduzirErro(falha: unknown): Error {
+  const erro = falha instanceof Error ? falha : new Error('Falha ao ler os dados.');
+  const codigo = (erro as { code?: unknown }).code;
+
+  if (codigo === 'permission-denied') {
+    if (__DEV__) {
+      console.warn(
+        '[PAUSA] permission-denied no Firestore. Se a conta tem papel de administrador, as Security Rules publicadas podem estar mais antigas que firestore.rules. Publique com "firebase deploy --only firestore:rules".',
+        erro.message,
+      );
+    }
+
+    // "Acesso restrito" é a palavra do contrato (`646:107`), não redação minha.
+    return new Error('Acesso restrito.');
+  }
+
+  // 503 e 401 do `668:181`. O Figma nomeia as duas situações mas não escreve o
+  // texto de tela; estas frases estão em `TEXTOS_SEM_FONTE` para revisão.
+  if (codigo === 'unavailable') {
+    return new Error('Falha temporária. Tente novamente.');
+  }
+
+  if (codigo === 'unauthenticated') {
+    return new Error('Sessão expirada.');
+  }
+
+  return erro;
+}
+
+/**
  * As funções `observar*` nunca lançam: sem Firestore, avisam pelo callback de
  * falha e devolvem um cancelamento vazio. Assim a tela trata "não configurado"
  * pelo mesmo caminho de qualquer outro erro, sem try/catch em volta do efeito.
  */
 function assinar(
   aoFalhar: (erro: Error) => void,
-  montar: (banco: NonNullable<typeof db>) => () => void,
+  montar: (banco: NonNullable<typeof db>, falhar: (erro: Error) => void) => () => void,
 ): () => void {
+  // `falhar` é o que se entrega ao `onSnapshot`: assim nenhuma tela precisa
+  // lembrar de traduzir o erro, e nenhum erro do SDK escapa em inglês.
+  const falhar = (erro: Error) => aoFalhar(traduzirErro(erro));
+
   if (!db) {
     queueMicrotask(() => aoFalhar(new Error(SEM_FIREBASE)));
     return () => {};
   }
 
   try {
-    return montar(db);
+    return montar(db, falhar);
   } catch (falha) {
-    queueMicrotask(() =>
-      aoFalhar(falha instanceof Error ? falha : new Error('Falha ao abrir a consulta.')),
-    );
+    queueMicrotask(() => falhar(falha instanceof Error ? falha : new Error('Falha ao abrir a consulta.')));
     return () => {};
   }
 }
@@ -119,11 +188,69 @@ function textos(valor: unknown): TextoPorNivel {
   };
 }
 
+/** Valor de uma lista fechada, ou o padrão — documento antigo não tem o campo. */
+function daLista<T extends string>(valor: unknown, lista: readonly T[], padrao: T): T {
+  const lido = texto(valor);
+
+  return (lista as readonly string[]).includes(lido) ? (lido as T) : padrao;
+}
+
+function opcoesDaReflexao(valor: unknown): OpcaoReflexao[] {
+  if (!Array.isArray(valor)) return [];
+
+  return valor
+    .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+    .map((item) => ({ id: texto(item.id), texto: texto(item.texto) }))
+    // Opção sem id não tem como ser respondida: a resposta guarda o id.
+    .filter((opcao) => opcao.id);
+}
+
+function etapas(valor: unknown): EtapasDaAula {
+  const bruto = (valor ?? {}) as Record<string, unknown>;
+  const base = etapasVazias();
+  const opcoes = opcoesDaReflexao(bruto.opcoes);
+
+  return {
+    introducao: texto(bruto.introducao),
+    modoFonte: daLista<ModoFonte>(bruto.modoFonte, MODOS_FONTE, base.modoFonte),
+    fonte: texto(bruto.fonte),
+    explicacao: texto(bruto.explicacao),
+    pergunta: texto(bruto.pergunta),
+    // Sem nenhuma opção gravada, voltam as duas em branco do formulário — a
+    // tela precisa de algo onde escrever, e zero opções não é um estado válido.
+    opcoes: opcoes.length > 0 ? opcoes : base.opcoes,
+    orientacao: texto(bruto.orientacao),
+    pratica: texto(bruto.pratica),
+    sintese: texto(bruto.sintese),
+    leveComVoce: texto(bruto.leveComVoce),
+  };
+}
+
+function paraAula(valor: unknown): DadosDaAula {
+  const bruto = (valor ?? {}) as Record<string, unknown>;
+  const porNivel = (bruto.etapas ?? {}) as Record<string, unknown>;
+  const base = aulaVazia();
+
+  return {
+    fraseDestaque: texto(bruto.fraseDestaque),
+    duracaoMinutos:
+      typeof bruto.duracaoMinutos === 'number' ? bruto.duracaoMinutos : base.duracaoMinutos,
+    etapas: {
+      leigo: etapas(porNivel.leigo),
+      curioso: etapas(porNivel.curioso),
+      estudioso: etapas(porNivel.estudioso),
+      erudito: etapas(porNivel.erudito),
+    },
+  };
+}
+
 function paraConteudo(id: string, dados: DocumentData): Conteudo {
   const aplicacao = (dados.aplicacao ?? {}) as Record<string, unknown>;
 
   return {
     id,
+    // Todo conteúdo gravado antes de 16/09 é artigo: o campo nem existia.
+    tipo: daLista<TipoConteudo>(dados.tipo, TIPOS_CONTEUDO, 'artigo'),
     titulo: texto(dados.titulo),
     autorId: texto(dados.autorId),
     formato: (texto(dados.formato) || 'leitura') as Formato,
@@ -135,6 +262,7 @@ function paraConteudo(id: string, dados: DocumentData): Conteudo {
       titulo: texto(aplicacao.titulo),
       textos: textos(aplicacao.textos),
     },
+    aula: paraAula(dados.aula),
     status: (texto(dados.status) || 'rascunho') as StatusConteudo,
     atualizadoEm: millis(dados.atualizadoEm),
     versao: typeof dados.versao === 'number' ? dados.versao : 1,
@@ -146,11 +274,11 @@ export function observarConteudos(
   aoMudar: (conteudos: Conteudo[]) => void,
   aoFalhar: (erro: Error) => void,
 ): () => void {
-  return assinar(aoFalhar, (banco) =>
+  return assinar(aoFalhar, (banco, falhar) =>
     onSnapshot(
       query(collection(banco, CONTEUDOS), orderBy('atualizadoEm', 'desc')),
       (instantaneo) => aoMudar(instantaneo.docs.map((d) => paraConteudo(d.id, d.data()))),
-      aoFalhar,
+      falhar,
     ),
   );
 }
@@ -160,12 +288,12 @@ export function observarConteudo(
   aoMudar: (conteudo: Conteudo | null) => void,
   aoFalhar: (erro: Error) => void,
 ): () => void {
-  return assinar(aoFalhar, (banco) =>
+  return assinar(aoFalhar, (banco, falhar) =>
     onSnapshot(
       doc(banco, CONTEUDOS, id),
       (instantaneo) =>
         aoMudar(instantaneo.exists() ? paraConteudo(instantaneo.id, instantaneo.data()) : null),
-      aoFalhar,
+      falhar,
     ),
   );
 }
@@ -275,7 +403,7 @@ export async function publicarConteudo(
  *
  * Recusa enquanto houver destaque programado de hoje em diante, a menos que
  * `removerDestaques` seja verdadeiro — o mesmo padrão de "data ocupada vira
- * pergunta, não erro" de `programarDestaque`. Destaque passado fica: é registro
+ * pergunta, não erro" de `programarEdicao`. Edição encerrada fica: é registro
  * do que já foi ao ar, e reescrever o passado seria mentir sobre ele.
  */
 export async function arquivarConteudo(
@@ -290,19 +418,23 @@ export async function arquivarConteudo(
     query(collection(banco, AGENDA), where('conteudoId', '==', id)),
   );
 
-  // Filtra a data em memória de propósito: igualdade num campo com faixa em
-  // outro exigiria índice composto no Firestore, e a agenda é pequena.
-  const hoje = hojeEditorial();
-  const futuros = agendados.docs.filter((d) => texto(d.data().data) >= hoje);
+  // Filtra o período em memória de propósito: faixa de datas com igualdade em
+  // outro campo exigiria índice composto, e a agenda é pequena.
+  const agora = agoraEditorial();
+  const futuros = agendados.docs
+    .map((d) => paraEdicao(d.id, d.data()))
+    // Edição já encerrada é histórico do que foi ao ar; só as que ainda valem
+    // atrapalham o arquivamento.
+    .filter((edicao) => edicao.fim > agora);
 
   if (futuros.length > 0 && !removerDestaques) {
-    const datas = futuros
-      .map((d) => texto(d.data().data))
+    const periodos = futuros
+      .map((edicao) => periodoParaExibicao(edicao.inicio, edicao.fim))
       .sort()
-      .join(', ');
+      .join('; ');
 
     throw new ErroPedeConfirmacao(
-      `Este conteúdo está programado no Conhecimento do dia em ${datas}. Arquivar vai desmarcar ${futuros.length === 1 ? 'essa data' : 'essas datas'}.`,
+      `Este conteúdo está programado em ${periodos}. Arquivar vai desmarcar ${futuros.length === 1 ? 'essa edição' : 'essas edições'}.`,
     );
   }
 
@@ -388,53 +520,102 @@ export async function restaurarConteudo(
   });
 }
 
-// --- Conhecimento do dia -----------------------------------------------------
+// --- Programação semanal -----------------------------------------------------
 
-/** Hoje no fuso editorial, como `AAAA-MM-DD` — o mesmo formato da agenda. */
-function hojeEditorial(): string {
-  return new Intl.DateTimeFormat('en-CA', {
+/**
+ * Agora em Brasília, como `AAAA-MM-DDTHH:MM` — o mesmo formato da agenda.
+ *
+ * Sai no formato gravado de propósito: com fuso único, comparar períodos é
+ * comparar texto, e este é o único ponto do arquivo que precisa saber que
+ * horas são.
+ */
+export function agoraEditorial(): string {
+  const partes = new Intl.DateTimeFormat('en-CA', {
     timeZone: FUSO_EDITORIAL_PADRAO,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  }).format(new Date());
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date());
+
+  const de = (tipo: string) => partes.find((parte) => parte.type === tipo)?.value ?? '00';
+
+  return `${de('year')}-${de('month')}-${de('day')}T${de('hour')}:${de('minute')}`;
 }
 
-function paraDestaque(id: string, dados: DocumentData): DestaqueAgendado {
+/**
+ * Instante gravado, subindo os formatos antigos.
+ *
+ * Passou por três formatos: `data` (agenda diária, até 15/09), `inicio` só com
+ * a data (15/09) e `AAAA-MM-DDTHH:MM` (16/09). Uma data sem hora vira
+ * meia-noite, que é o que ela sempre significou na prática — assim edição
+ * antiga continua aparecendo na lista em vez de sumir.
+ */
+function comoInstante(valor: string): string {
+  if (!valor) return '';
+
+  return valor.length >= 16 ? valor.slice(0, 16) : `${valor.slice(0, 10)}T00:00`;
+}
+
+function paraEdicao(id: string, dados: DocumentData): EdicaoSemanal {
+  const inicio = comoInstante(texto(dados.inicio) || texto(dados.data));
+  const fimGravado = comoInstante(texto(dados.fim));
+
   return {
     id,
+    nome: texto(dados.nome),
     conteudoId: texto(dados.conteudoId),
-    data: texto(dados.data),
-    fuso: texto(dados.fuso),
+    inicio,
+    // Registro sem término (a agenda diária) vale os sete dias padrão.
+    fim: fimGravado || (inicio ? fimDaEdicao(inicio) : ''),
+    fuso: texto(dados.fuso) || FUSO_EDITORIAL_PADRAO,
     agendadoPor: texto(dados.agendadoPor),
     agendadoEm: millis(dados.agendadoEm),
   };
 }
 
-export function observarAgenda(
-  aoMudar: (destaques: DestaqueAgendado[]) => void,
+export function observarEdicoes(
+  aoMudar: (edicoes: EdicaoSemanal[]) => void,
   aoFalhar: (erro: Error) => void,
 ): () => void {
-  return assinar(aoFalhar, (banco) =>
+  return assinar(aoFalhar, (banco, falhar) =>
     onSnapshot(
-      query(collection(banco, AGENDA), orderBy('data', 'desc')),
-      (instantaneo) => aoMudar(instantaneo.docs.map((d) => paraDestaque(d.id, d.data()))),
-      aoFalhar,
+      // Sem `orderBy`: o Firestore deixa de fora quem não tem o campo, e a
+      // agenda anterior a 15/09 gravava `data`, não `inicio` — essas edições
+      // sumiriam da lista apesar de `paraEdicao` saber lê-las. A ordenação é
+      // feita aqui, que é barato numa coleção deste tamanho.
+      collection(banco, AGENDA),
+      (instantaneo) =>
+        aoMudar(
+          instantaneo.docs
+            .map((d) => paraEdicao(d.id, d.data()))
+            .sort((a, b) => b.inicio.localeCompare(a.inicio)),
+        ),
+      falhar,
     ),
   );
 }
 
 /**
- * Programa o destaque do dia.
+ * Programa a edição da semana.
  *
- * Recusa conteúdo que não esteja publicado e data já ocupada — a menos que
- * `substituir` seja verdadeiro, o que a tela só envia após confirmação.
+ * Recusa conteúdo que não esteja publicado e período que cruze outra edição —
+ * "uma única edição ativa por vez" (contrato `671:1237`). Sobreposição não é
+ * erro seco: vira pergunta, e a tela reenvia com `substituirId` depois de
+ * confirmar, o mesmo padrão que a agenda diária já usava.
  */
-export async function programarDestaque(
-  entrada: { conteudoId: string; data: string; fuso: string },
+export async function programarEdicao(
+  entrada: { nome: string; conteudoId: string; inicio: string; fim: string },
   autorUid: string,
-  substituir = false,
+  substituirId?: string,
 ): Promise<void> {
+  const pendencias = pendenciasDaEdicao(entrada);
+  if (pendencias.length > 0) {
+    throw new ErroDeRegra(pendencias.join(' '));
+  }
+
   const banco = requireDb();
 
   const conteudo = await getDoc(doc(banco, CONTEUDOS, entrada.conteudoId));
@@ -446,26 +627,36 @@ export async function programarDestaque(
     throw new ErroDeRegra('Só é possível destacar um conteúdo publicado.');
   }
 
-  const ocupada = await getDocs(
-    query(collection(banco, AGENDA), where('data', '==', entrada.data)),
-  );
+  // O término vem da tela desde 16/09: deixou de ser sempre início + 7 dias.
+  const periodo = { inicio: entrada.inicio, fim: entrada.fim };
 
-  const existente = ocupada.docs[0];
+  // Cruzamento é faixa contra faixa, o que o Firestore não consulta: a
+  // verificação roda em memória, e a agenda é pequena por natureza.
+  const todas = await getDocs(collection(banco, AGENDA));
 
-  if (existente && !substituir) {
-    throw new ErroDeRegra('Já existe destaque nesta data.');
+  const conflito = todas.docs
+    .filter((d) => d.id !== substituirId)
+    .map((d) => paraEdicao(d.id, d.data()))
+    .find((edicao) => periodosSeSobrepoem(periodo, edicao));
+
+  if (conflito) {
+    throw new ErroPedeConfirmacao(
+      `O período ${periodoParaExibicao(periodo.inicio, periodo.fim)} cruza a edição “${conflito.nome || 'sem nome'}” (${periodoParaExibicao(conflito.inicio, conflito.fim)}). Substituir aquela edição?`,
+    );
   }
 
   const payload = {
+    nome: entrada.nome.trim(),
     conteudoId: entrada.conteudoId,
-    data: entrada.data,
-    fuso: entrada.fuso,
+    inicio: periodo.inicio,
+    fim: periodo.fim,
+    fuso: FUSO_EDITORIAL_PADRAO,
     agendadoPor: autorUid,
     agendadoEm: serverTimestamp(),
   };
 
-  if (existente) {
-    await setDoc(doc(banco, AGENDA, existente.id), payload);
+  if (substituirId) {
+    await setDoc(doc(banco, AGENDA, substituirId), payload);
     return;
   }
 
@@ -479,7 +670,7 @@ function paraFilosofo(id: string, dados: DocumentData): Filosofo {
     id,
     nome: texto(dados.nome),
     biografia: texto(dados.biografia),
-    fotoUrl: texto(dados.fotoUrl) || null,
+    portraitAssetId: texto(dados.portraitAssetId) || null,
     atualizadoEm: millis(dados.atualizadoEm),
   };
 }
@@ -489,11 +680,11 @@ export function observarFilosofos(
   aoMudar: (filosofos: Filosofo[]) => void,
   aoFalhar: (erro: Error) => void,
 ): () => void {
-  return assinar(aoFalhar, (banco) =>
+  return assinar(aoFalhar, (banco, falhar) =>
     onSnapshot(
       query(collection(banco, FILOSOFOS), orderBy('nome')),
       (instantaneo) => aoMudar(instantaneo.docs.map((d) => paraFilosofo(d.id, d.data()))),
-      aoFalhar,
+      falhar,
     ),
   );
 }
@@ -526,7 +717,7 @@ export async function criarFilosofo(rascunho: RascunhoFilosofo): Promise<string>
   await setDoc(referencia, {
     nome: rascunho.nome.trim(),
     biografia: rascunho.biografia.trim(),
-    fotoUrl: null,
+    portraitAssetId: rascunho.portraitAssetId,
     atualizadoEm: serverTimestamp(),
   });
 
@@ -553,6 +744,7 @@ export async function salvarFilosofo(id: string, rascunho: RascunhoFilosofo): Pr
   await updateDoc(referencia, {
     nome: rascunho.nome.trim(),
     biografia: rascunho.biografia.trim(),
+    portraitAssetId: rascunho.portraitAssetId,
     atualizadoEm: serverTimestamp(),
   });
 }
@@ -576,7 +768,9 @@ export async function semearFilosofos(): Promise<number> {
     lote.set(referencia, {
       nome: semente.nome,
       biografia: '',
-      fotoUrl: null,
+      // A semente já vem com retrato quando o acervo tem um para ela: sem isto,
+      // importar os seis deixaria todos na inicial do nome.
+      portraitAssetId: retratoDoAcervo(semente.id) ? semente.id : null,
       atualizadoEm: serverTimestamp(),
     });
     novos += 1;
@@ -608,11 +802,11 @@ export function observarUsuarios(
   aoMudar: (usuarios: PerfilUsuario[]) => void,
   aoFalhar: (erro: Error) => void,
 ): () => void {
-  return assinar(aoFalhar, (banco) =>
+  return assinar(aoFalhar, (banco, falhar) =>
     onSnapshot(
       query(collection(banco, USUARIOS), orderBy('nome')),
       (instantaneo) => aoMudar(instantaneo.docs.map((d) => paraPerfil(d.id, d.data()))),
-      aoFalhar,
+      falhar,
     ),
   );
 }

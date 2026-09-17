@@ -104,7 +104,7 @@ export default function AdminConfirmarPermissaoScreen() {
   return (
     <PaginaAdmin
       titulo="ALTERAR PERMISSÃO"
-      apoio={`${nome} · ${alvo.email}`}
+      apoio={alvo.email}
       topo={topo}
       nota="A alteração é registrada com responsável, data e valores anterior e novo.">
       <CaixaSecao titulo="PERMISSÃO ATUAL" espacamento="sm">

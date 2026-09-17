@@ -6,11 +6,11 @@ import { PixelifySans_500Medium } from '@expo-google-fonts/pixelify-sans/500Medi
 import { PixelifySans_600SemiBold } from '@expo-google-fonts/pixelify-sans/600SemiBold';
 import { PixelifySans_700Bold } from '@expo-google-fonts/pixelify-sans/700Bold';
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
+import { Stack, usePathname } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 
 import { SplashOverlay } from '@/components/splash-overlay';
 import { useTheme } from '@/hooks/use-theme';
@@ -45,8 +45,19 @@ export default function RootLayout() {
   );
 }
 
+/**
+ * Largura de referência do app (`516:837`): "viewport de referência:
+ * 390 × 844px". No navegador de desktop, sem este limite, as telas do app
+ * esticam de ponta a ponta — o login virava uma faixa de 2000px de largura.
+ *
+ * O painel administrativo é a exceção: foi desenhado em 1200px e tem o próprio
+ * limite em `PaginaAdmin`.
+ */
+const LARGURA_DO_APP = 390;
+
 function RootNavigator() {
   const { colors } = useTheme();
+  const caminho = usePathname();
   const { isSignedIn, verificacaoPendente, initializing: authInitializing } = useAuth();
   const { onboardingDone, initializing: onboardingInitializing } = useOnboarding();
 
@@ -67,10 +78,14 @@ function RootNavigator() {
     return null;
   }
 
+  // Só no navegador e fora do painel. No aparelho a tela já tem a largura certa,
+  // e limitar ali deixaria faixas nas laterais em tablet.
+  const emColuna = Platform.OS === 'web' && !caminho.startsWith('/admin');
+
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: colors.canvas }]}>
       <View
-        style={styles.root}
+        style={[styles.root, emColuna && styles.coluna]}
         importantForAccessibility={splashDone ? 'auto' : 'no-hide-descendants'}
         accessibilityElementsHidden={!splashDone}>
         <Stack
@@ -119,5 +134,10 @@ function RootNavigator() {
 }
 
 const styles = StyleSheet.create({
+  coluna: {
+    width: '100%',
+    maxWidth: LARGURA_DO_APP,
+    alignSelf: 'center',
+  },
   root: { flex: 1 },
 });

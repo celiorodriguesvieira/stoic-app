@@ -52,7 +52,7 @@ export function idDoNome(nome: string): string {
 export function nomeDoFilosofoEm(filosofos: readonly Filosofo[], id: string): string {
   return filosofos.find((filosofo) => filosofo.id === id)?.nome
     ?? SEMENTE_FILOSOFOS.find((filosofo) => filosofo.id === id)?.nome
-    ?? '—';
+    ?? 'Sem autor';
 }
 
 export function nomesDosTemas(ids: string[]): string {
@@ -60,5 +60,5 @@ export function nomesDosTemas(ids: string[]): string {
     .map((id) => TEMAS.find((tema) => tema.id === id)?.nome)
     .filter((nome): nome is string => !!nome);
 
-  return nomes.length > 0 ? nomes.join(' · ') : '—';
+  return nomes.length > 0 ? nomes.join(', ') : 'Sem tema';
 }

@@ -35,7 +35,7 @@ function mensagemDoErro(erro: unknown): string {
 
   switch (codigo) {
     case 'auth/network-request-failed':
-      return 'Sem conexão. Seu e-mail foi mantido — tente de novo.';
+      return 'Sem conexão. Seu e-mail foi mantido. Tente de novo.';
     case 'auth/too-many-requests':
       return 'Muitas tentativas. Aguarde um momento e tente de novo.';
     default:

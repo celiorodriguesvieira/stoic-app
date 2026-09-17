@@ -6,15 +6,38 @@ import { Text } from '@/components/ui/text';
 import { useAuth } from '@/lib/auth-context';
 import { spacing } from '@/theme';
 
-export type AbaAdmin = 'conteudos' | 'conhecimento' | 'usuarios' | 'filosofos';
+export type AbaAdmin = 'conteudos' | 'programacao' | 'usuarios' | 'filosofos';
 
-/** Navegação administrativa do nó `596:9`. A aba atual fica preenchida. */
+/**
+ * Navegação administrativa do nó `596:9`. A aba atual fica preenchida.
+ *
+ * A ordem segue o trabalho, não a estrutura do painel: escolher o filósofo,
+ * cadastrar o conteúdo da semana, programar a semana. Usuários fica por
+ * último, porque não faz parte do fluxo editorial. O Figma lista Conteúdos
+ * primeiro; quando Atividades existir, entra entre Filósofos e Conteúdos, que
+ * é onde ela cai no fluxo.
+ *
+ * Não há saída para o app aqui, e isso é do desenho: "admin desktop:
+ * navegação administrativa própria, sem hambúrguer do app" (`654:1759`). A
+ * entrada é o item "Painel administrativo" do menu Seu espaço (`645:977`).
+ *
+ * O Figma desenha oito itens; existem quatro. Faltam ATIVIDADES, EXPLORAR,
+ * BIBLIOTECA e TEMAS, porque as telas ainda não existem.
+ */
 export function NavegacaoAdmin({ atual }: { atual: AbaAdmin }) {
   const router = useRouter();
   const { podeAdministrar } = useAuth();
 
   return (
     <View style={styles.barra}>
+      <Button
+        label="FILÓSOFOS"
+        size="medium"
+        type={atual === 'filosofos' ? 'primary' : 'secondary'}
+        onPress={() => router.replace('/admin/filosofos')}
+        style={styles.pilula}
+      />
+
       <Button
         label="CONTEÚDOS"
         size="medium"
@@ -24,22 +47,14 @@ export function NavegacaoAdmin({ atual }: { atual: AbaAdmin }) {
       />
 
       <Button
-        label="CONHECIMENTO DO DIA"
+        label="PROGRAMAÇÃO SEMANAL"
         size="medium"
-        type={atual === 'conhecimento' ? 'primary' : 'secondary'}
-        onPress={() => router.replace('/admin/conhecimento-do-dia')}
+        type={atual === 'programacao' ? 'primary' : 'secondary'}
+        onPress={() => router.replace('/admin/programacao')}
         style={styles.pilula}
       />
 
-      <Button
-        label="FILÓSOFOS"
-        size="medium"
-        type={atual === 'filosofos' ? 'primary' : 'secondary'}
-        onPress={() => router.replace('/admin/filosofos')}
-        style={styles.pilula}
-      />
-
-      {/* Só administrador mexe em pessoas — a aba nem aparece para editor. */}
+      {/* Só administrador mexe em pessoas, e a aba nem aparece para editor. */}
       {podeAdministrar ? (
         <Button
           label="USUÁRIOS E PERMISSÕES"

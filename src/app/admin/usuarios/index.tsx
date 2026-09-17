@@ -84,7 +84,7 @@ export default function AdminUsuariosScreen() {
 
             return (
               <View key={pessoa.uid} style={styles.linha}>
-                <Text style={styles.colNome}>{pessoa.nome || '—'}</Text>
+                <Text style={styles.colNome}>{pessoa.nome || 'Sem nome'}</Text>
                 <Text style={styles.colEmail} color="textSecondary">
                   {pessoa.email}
                 </Text>

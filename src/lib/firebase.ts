@@ -20,7 +20,7 @@ export const isFirebaseConfigured = missing.length === 0;
 
 if (!isFirebaseConfigured && __DEV__) {
   console.warn(
-    `[PAUSA] Firebase não configurado — faltam: ${missing.join(', ')}.\n` +
+    `[PAUSA] Firebase não configurado. Faltam: ${missing.join(', ')}.\n` +
       `O app roda, mas login e Firestore ficam indisponíveis.\n` +
       `Copie .env.example para .env e preencha com as credenciais do Console do Firebase ` +
       `(Configurações do projeto > Seus apps > Web > Configuração do SDK).`,

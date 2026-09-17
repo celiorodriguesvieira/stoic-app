@@ -7,6 +7,7 @@ import { OpcaoInteresse, OpcaoNivel } from '@/components/onboarding/opcoes';
 import { ProgressoOnboarding } from '@/components/onboarding/progresso';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
+import { Voltar } from '@/components/ui/voltar';
 import { useTheme } from '@/hooks/use-theme';
 import { useOnboarding, type ParcialOnboarding } from '@/lib/onboarding-context';
 import { spacing } from '@/theme';
@@ -92,7 +93,9 @@ export default function OnboardingScreen() {
               <View style={[styles.kickerLinha, { backgroundColor: colors.gold }]} />
             </View>
           ) : (
-            <View />
+            // Mesmo caminho do botão físico do Android, que não existe no
+            // iPhone: sem isto, a segunda tela não tinha volta nenhuma.
+            <Voltar destino="Etapa anterior" aoVoltar={() => atualizar({ etapa: etapa - 1 })} />
           )}
           <Text variant="supportSemibold" style={styles.numero}>
             {String(etapa + 1).padStart(2, '0')}
@@ -129,7 +132,7 @@ export default function OnboardingScreen() {
             <CardRetratoFilosofo
               nome="Sêneca"
               contexto="Filósofo estoico e senador romano"
-              periodo="4 a.C. — 65 d.C."
+              periodo="4 a.C. a 65 d.C."
               imagem={require('@/assets/images/retratos/seneca-abertura.png')}
               largura={181}
               altura={138}
@@ -164,7 +167,7 @@ export default function OnboardingScreen() {
             <CardRetratoFilosofo
               nome="Friedrich Nietzsche"
               contexto="Filósofo alemão"
-              periodo="1844 — 1900"
+              periodo="1844 a 1900"
               imagem={require('@/assets/images/retratos/nietzsche-leitura.png')}
               largura={167}
               altura={136}

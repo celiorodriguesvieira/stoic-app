@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { Aviso, Carregando, ErroRecuperavel } from '@/components/admin/estados';
@@ -7,11 +7,13 @@ import { BotaoVoltar } from '@/components/admin/navegacao';
 import { CaixaSecao, Linha, PaginaAdmin } from '@/components/admin/pagina';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
-import { nomesDosTemas } from '@/lib/admin/acervo';
-import { observarConteudo, publicarConteudo } from '@/lib/admin/repositorio';
+import { mensagemDeErro, observarConteudo, publicarConteudo } from '@/lib/admin/repositorio';
 import {
   aplicacaoVinculada,
+  MAX_FRASE_DESTAQUE,
+  MIN_FRASE_DESTAQUE,
   NIVEIS,
+  nivelCompleto,
   pendenciasParaPublicar,
   ROTULO_NIVEL,
   type Conteudo,
@@ -76,15 +78,25 @@ export default function AdminRevisarScreen() {
       // O rascunho continua intacto — nada é apagado numa falha de publicação.
       setPublicacao({
         estado: 'erro',
-        mensagem: falha instanceof Error ? falha.message : 'Não foi possível publicar.',
+        mensagem: mensagemDeErro(falha, 'Não foi possível publicar.'),
       });
     }
   }
 
+  // O botão volta para o editor do tipo certo. Enquanto a leitura não chegou,
+  // o destino é o catálogo — nunca um editor que apagaria o outro registro.
   const topo = (
     <BotaoVoltar
-      rotulo="← EDITOR"
-      aoVoltar={() => router.replace(`/admin/conteudo/${id}`)}
+      rotulo={conteudo?.tipo === 'aula' ? '← AULA' : '← EDITOR'}
+      aoVoltar={() =>
+        router.replace(
+          conteudo === null
+            ? '/admin'
+            : conteudo.tipo === 'aula'
+              ? `/admin/aula/${conteudo.id}`
+              : `/admin/conteudo/${conteudo.id}`,
+        )
+      }
     />
   );
 
@@ -115,7 +127,7 @@ export default function AdminRevisarScreen() {
   return (
     <PaginaAdmin
       titulo="REVISAR E PUBLICAR"
-      apoio={`Exemplo visual · ${ROTULO_NIVEL[nivel]} • Conferir as quatro versões antes de publicar.`}
+      apoio={`Conferir as quatro versões antes de publicar. Vendo o nível ${ROTULO_NIVEL[nivel]}.`}
       topo={topo}
       nota="Após publicar, o conteúdo volta à lista com status Publicado. Numa falha, o rascunho é preservado e a tentativa pode ser repetida.">
       <Linha>
@@ -133,32 +145,70 @@ export default function AdminRevisarScreen() {
       </Linha>
 
       <Linha>
-        <Previa conteudo={conteudo} nivel={nivel} />
+        {conteudo.tipo === 'aula' ? (
+          <PreviaDaAula conteudo={conteudo} nivel={nivel} />
+        ) : (
+          <Previa conteudo={conteudo} nivel={nivel} />
+        )}
 
         <View style={styles.checklist}>
           <CaixaSecao titulo="CHECKLIST DE PUBLICAÇÃO">
-            <Item
-              ok={!!conteudo.autorId && conteudo.temaIds.length > 0 && !!conteudo.fonte.trim()}
-              rotulo="Autor, temas e fonte"
-            />
+            {conteudo.tipo === 'aula' ? (
+              <>
+                <Item
+                  ok={!!conteudo.autorId && conteudo.temaIds.length > 0}
+                  rotulo="Filósofo principal e temas"
+                />
 
-            {NIVEIS.map((cada) => (
-              <Item
-                key={cada}
-                ok={conteudo.textos[cada].trim().length > 0}
-                rotulo={ROTULO_NIVEL[cada]}
-              />
-            ))}
+                <Item
+                  ok={
+                    conteudo.aula.fraseDestaque.trim().length >= MIN_FRASE_DESTAQUE &&
+                    conteudo.aula.fraseDestaque.trim().length <= MAX_FRASE_DESTAQUE
+                  }
+                  rotulo={`Frase do card (${MIN_FRASE_DESTAQUE}–${MAX_FRASE_DESTAQUE} caracteres)`}
+                />
 
-            <Item
-              ok={aplicacaoVinculada(conteudo.aplicacao)}
-              rotulo="Aplicação cotidiana vinculada"
-            />
+                <Item ok={conteudo.aula.duracaoMinutos > 0} rotulo="Duração estimada" />
 
-            <Text variant="supportSemibold">
-              Ao publicar, o conteúdo fica disponível em Explorar e na página do filósofo. A
-              aplicação prática aparece também em Filosofia no Cotidiano, sem cópias.
-            </Text>
+                {NIVEIS.map((cada) => (
+                  <Item
+                    key={cada}
+                    ok={nivelCompleto(conteudo.aula.etapas[cada])}
+                    rotulo={`${ROTULO_NIVEL[cada]}: quatro etapas`}
+                  />
+                ))}
+
+                <Text variant="supportSemibold">
+                  Publicar deixa a aula disponível para ser programada. Ela só aparece na Home
+                  quando entrar numa edição da Programação semanal.
+                </Text>
+              </>
+            ) : (
+              <>
+                <Item
+                  ok={!!conteudo.autorId && conteudo.temaIds.length > 0 && !!conteudo.fonte.trim()}
+                  rotulo="Autor, temas e fonte"
+                />
+
+                {NIVEIS.map((cada) => (
+                  <Item
+                    key={cada}
+                    ok={conteudo.textos[cada].trim().length > 0}
+                    rotulo={ROTULO_NIVEL[cada]}
+                  />
+                ))}
+
+                <Item
+                  ok={aplicacaoVinculada(conteudo.aplicacao)}
+                  rotulo="Aplicação cotidiana vinculada"
+                />
+
+                <Text variant="supportSemibold">
+                  Ao publicar, o conteúdo fica disponível em Explorar e na página do filósofo. A
+                  aplicação prática aparece também em Filosofia no Cotidiano, sem cópias.
+                </Text>
+              </>
+            )}
 
             {publicacao.estado === 'erro' ? (
               <Aviso mensagem={publicacao.mensagem} tom="erro" />
@@ -193,6 +243,104 @@ function Item({ ok, rotulo }: { ok: boolean; rotulo: string }) {
   );
 }
 
+
+/**
+ * A aula como a pessoa vai percorrer: as quatro etapas em sequência.
+ *
+ * É a mesma ordem do app (`61:6` a `61:9`) porque revisar fora de ordem não
+ * mostraria o que a revisão precisa mostrar — se a conclusão responde à
+ * reflexão que veio antes.
+ */
+function PreviaDaAula({ conteudo, nivel }: { conteudo: Conteudo; nivel: Nivel }) {
+  const { nomeDoFilosofo } = useFilosofos();
+
+  const etapas = conteudo.aula.etapas[nivel];
+  const escritas = etapas.opcoes.filter((opcao) => opcao.texto.trim());
+
+  return (
+    <View style={styles.previa}>
+      <CaixaSecao espacamento="lg">
+        <Text variant="labelMetadata" color="textSecondary">
+          CONHECIMENTO DA SEMANA
+        </Text>
+
+        <Text variant="cardHeading">
+          {conteudo.aula.fraseDestaque || 'Sem frase de destaque.'}
+        </Text>
+
+        <Text variant="labelMetadata" color="textSecondary">
+          {nomeDoFilosofo(conteudo.autorId).toLocaleUpperCase('pt-BR')}
+        </Text>
+
+        <View style={styles.divisor} />
+
+        <Text variant="headingMedium">{conteudo.titulo || 'Sem título'}</Text>
+
+        <Etapa numero={1} nome="Conteúdo">
+          <Texto valor={etapas.introducao} falta="Sem introdução ainda." />
+          <Texto valor={etapas.explicacao} falta="Sem explicação ainda." />
+          <Text variant="citationSource" color="textSecondary">
+            {etapas.fonte || 'Sem referência da fonte'}
+          </Text>
+        </Etapa>
+
+        <Etapa numero={2} nome="Reflexão">
+          <Texto valor={etapas.pergunta} falta="Sem pergunta ainda." />
+
+          {escritas.length > 0 ? (
+            escritas.map((opcao) => (
+              <Text key={opcao.id} color="textSecondary">
+                ○ {opcao.texto}
+              </Text>
+            ))
+          ) : (
+            <Text color="textSecondary">Sem opções escritas ainda.</Text>
+          )}
+
+          <Texto valor={etapas.orientacao} falta="Sem orientação ainda." />
+        </Etapa>
+
+        <Etapa numero={3} nome="Aplicação">
+          <Texto valor={etapas.pratica} falta="Sem prática ainda." />
+        </Etapa>
+
+        <Etapa numero={4} nome="Conclusão">
+          <Texto valor={etapas.sintese} falta="Sem síntese ainda." />
+          <Text variant="cardHeading">
+            {etapas.leveComVoce || 'Sem a frase “Leve com você”.'}
+          </Text>
+        </Etapa>
+      </CaixaSecao>
+    </View>
+  );
+}
+
+function Etapa({
+  numero,
+  nome,
+  children,
+}: {
+  numero: number;
+  nome: string;
+  children: ReactNode;
+}) {
+  return (
+    <View style={styles.etapa}>
+      <Text variant="labelMetadata" color="textSecondary">
+        {nome.toLocaleUpperCase('pt-BR')}
+      </Text>
+      {children}
+    </View>
+  );
+}
+
+/** Texto da prévia, ou o aviso de que ele ainda não existe. */
+function Texto({ valor, falta }: { valor: string; falta: string }) {
+  const escrito = valor.trim();
+
+  return <Text color={escrito ? 'text' : 'textSecondary'}>{escrito || falta}</Text>;
+}
+
 /** Como o conteúdo vai aparecer no app, no nível escolhido. */
 function Previa({ conteudo, nivel }: { conteudo: Conteudo; nivel: Nivel }) {
   // O acervo é lido aqui, e não recebido por propriedade, porque a prévia é a
@@ -206,8 +354,7 @@ function Previa({ conteudo, nivel }: { conteudo: Conteudo; nivel: Nivel }) {
     <View style={styles.previa}>
       <CaixaSecao espacamento="lg">
         <Text variant="labelMetadata" color="textSecondary">
-          {nomeDoFilosofo(conteudo.autorId).toLocaleUpperCase('pt-BR')} ·{' '}
-          {nomesDosTemas(conteudo.temaIds)}
+          {nomeDoFilosofo(conteudo.autorId).toLocaleUpperCase('pt-BR')}
         </Text>
 
         <Text variant="headingMedium">{conteudo.titulo || 'Sem título'}</Text>
@@ -242,6 +389,9 @@ const styles = StyleSheet.create({
   pilulaNivel: {
     flexGrow: 1,
     flexBasis: 160,
+  },
+  etapa: {
+    gap: spacing.sm,
   },
   previa: {
     width: LARGURA_PREVIA,

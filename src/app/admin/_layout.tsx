@@ -118,11 +118,25 @@ function AcessoNaoAutorizado() {
           onPress={entrarComOutraConta}
           style={styles.botao}
         />
+
+        {/* Pedido pelo contrato do acesso ao painel: "logado sem role admin:
+            mostrar 'Acesso restrito' e ação 'Voltar ao app'" (`646:107`). Sem
+            ele, quem não tem permissão fica parado nesta tela. */}
+        <VoltarAoApp />
       </View>
     </PaginaAdmin>
   );
 }
 
+/**
+ * Sem sessão em `/admin`.
+ *
+ * O login leva `?destino=/admin` porque o contrato manda voltar para onde a
+ * pessoa estava tentando ir: "sem login em /admin: abrir login e retornar a
+ * /admin após autenticação válida" (`646:107`). Sem o parâmetro — que foi o
+ * que aconteceu até 16/09 — quem abria o painel no navegador entrava e caía
+ * na Home do app, sem nada explicando por quê.
+ */
 function PrecisaEntrar() {
   const router = useRouter();
 
@@ -134,7 +148,7 @@ function PrecisaEntrar() {
         <Button
           label="IR PARA O LOGIN"
           size="medium"
-          onPress={() => router.replace('/entrar')}
+          onPress={() => router.replace('/entrar?destino=/admin')}
           style={styles.botao}
         />
       </View>

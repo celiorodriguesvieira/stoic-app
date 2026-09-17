@@ -1,64 +1,115 @@
-import { Image, type ImageSource } from 'expo-image';
+import { Image } from 'expo-image';
 import { StyleSheet, View, type ViewProps } from 'react-native';
 
-import { CitacaoAutoria } from '@/components/citacao-autoria';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
+import { retratoDoAcervo } from '@/lib/retratos';
 import { radius, spacing } from '@/theme';
 
-const MIN_HEIGHT = 173;
-const PORTRAIT_WIDTH = 215;
-const PORTRAIT_HEIGHT = 155;
-const PORTRAIT_OVERFLOW = -40;
+const ALTURA = 210;
+const RETRATO_LARGURA = 146;
+const RETRATO_ALTURA = 105;
 
-export type MensagemSemanalProps = ViewProps & {
-  citacao: string;
+export type ConhecimentoDaSemanaProps = ViewProps & {
+  /** `weeklyCardPhrase`: frase editorial de 10–80 caracteres, **sem aspas**. */
+  frase: string;
   autor: string;
-  obra: string;
-  retrato?: ImageSource | number;
+  duracaoMinutos: number;
+  /** Id do acervo de retratos. Sem retrato, o card fica só com o texto. */
+  retratoId?: string | null;
 };
 
-export function CardMensagemSemanal({
-  citacao,
+/**
+ * O card do Conhecimento da semana (`327:502`).
+ *
+ * Mostrava uma citação com autor e obra até 16/09. O contrato trocou isso pela
+ * **frase de destaque** da aula, e a troca tem motivo escrito: "frase
+ * editorial sem aspas… não atribuir frase editorial como citação literal"
+ * (`668:128`). Por isso não há aspas nem nome de obra aqui — o que aparece é
+ * texto da redação, não fala do filósofo.
+ */
+export function CardConhecimentoDaSemana({
+  frase,
   autor,
-  obra,
-  retrato,
+  duracaoMinutos,
+  retratoId = null,
   style,
   ...rest
-}: MensagemSemanalProps) {
+}: ConhecimentoDaSemanaProps) {
   const { colors } = useTheme();
+
+  const retrato = retratoDoAcervo(retratoId);
 
   return (
     <View style={[styles.card, { backgroundColor: colors.accent }, style]} {...rest}>
       {retrato ? (
-        <Image source={retrato} style={styles.retrato} contentFit="contain" />
+        <Image
+          source={retrato.arquivo}
+          style={styles.retrato}
+          contentFit="contain"
+          // Decorativo: o nome do filósofo está escrito logo abaixo, e a
+          // ilustração não acrescenta informação a quem ouve a tela.
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+        />
       ) : null}
 
-      <Text variant="cardQuote" color="textOnAccent" style={styles.citacao}>
-        {citacao}
+      <View style={styles.topo}>
+        <Text variant="cardTitle" color="textOnAccent" style={styles.selo}>
+          CONHECIMENTO DA SEMANA
+        </Text>
+
+        {duracaoMinutos > 0 ? (
+          <View style={[styles.tempo, { backgroundColor: colors.gold }]}>
+            <Text variant="cardLabel" color="textOnAccent">
+              {duracaoMinutos} MIN
+            </Text>
+          </View>
+        ) : null}
+      </View>
+
+      <Text variant="cardHeading" color="textOnAccent" style={styles.frase}>
+        {frase}
       </Text>
 
-      <CitacaoAutoria autor={autor} obra={obra} alinhamento="esquerda" cor="gold" />
+      <Text variant="labelMetadata" color="gold">
+        {autor.toLocaleUpperCase('pt-BR')}
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    minHeight: MIN_HEIGHT,
+    minHeight: ALTURA,
     borderRadius: radius.xl + 2,
     overflow: 'hidden',
     padding: spacing.lg,
     justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  topo: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+  },
+  selo: {
+    flex: 1,
+  },
+  tempo: {
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
   },
   retrato: {
     position: 'absolute',
-    right: PORTRAIT_OVERFLOW,
-    top: spacing.xl,
-    width: PORTRAIT_WIDTH,
-    height: PORTRAIT_HEIGHT,
+    right: 0,
+    bottom: 0,
+    width: RETRATO_LARGURA,
+    height: RETRATO_ALTURA,
   },
-  citacao: {
-    maxWidth: '80%',
+  frase: {
+    // Deixa a ilustração respirar: a frase não passa por cima do retrato.
+    maxWidth: '62%',
   },
 });

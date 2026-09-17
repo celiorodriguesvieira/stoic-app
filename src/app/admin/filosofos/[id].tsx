@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { StyleSheet } from 'react-native';
+import { Pressable, StyleSheet } from 'react-native';
 
 import { CampoTexto } from '@/components/admin/campos';
 import { Aviso, Carregando, ErroRecuperavel } from '@/components/admin/estados';
@@ -9,14 +9,16 @@ import { CaixaSecao, Linha, PaginaAdmin } from '@/components/admin/pagina';
 import { Retrato } from '@/components/admin/retrato';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
-import { criarFilosofo, salvarFilosofo } from '@/lib/admin/repositorio';
+import { useTheme } from '@/hooks/use-theme';
+import { criarFilosofo, mensagemDeErro, salvarFilosofo } from '@/lib/admin/repositorio';
 import {
   filosofoVazio,
   pendenciasDoFilosofo,
   type RascunhoFilosofo,
 } from '@/lib/admin/tipos';
 import { useFilosofos } from '@/lib/admin/use-filosofos';
-import { spacing } from '@/theme';
+import { ACERVO_DE_RETRATOS, retratoDoAcervo } from '@/lib/retratos';
+import { radius, spacing } from '@/theme';
 
 type Gravacao = { estado: 'ocioso' } | { estado: 'salvando' } | { estado: 'erro'; mensagem: string };
 
@@ -31,6 +33,7 @@ export default function AdminFilosofoScreen() {
   const [rascunho, setRascunho] = useState<RascunhoFilosofo>(filosofoVazio);
   const [gravacao, setGravacao] = useState<Gravacao>({ estado: 'ocioso' });
   const [tocado, setTocado] = useState(false);
+  const [escolherAberto, setEscolherAberto] = useState(false);
   const hidratado = useRef(false);
 
   const existente = criando ? null : filosofos.find((filosofo) => filosofo.id === id);
@@ -41,11 +44,21 @@ export default function AdminFilosofoScreen() {
     if (criando || hidratado.current || !existente) return;
 
     hidratado.current = true;
-    setRascunho({ nome: existente.nome, biografia: existente.biografia });
+    setRascunho({
+      nome: existente.nome,
+      biografia: existente.biografia,
+      portraitAssetId: existente.portraitAssetId,
+    });
   }, [criando, existente]);
 
   const pendencias = pendenciasDoFilosofo(rascunho);
   const salvando = gravacao.estado === 'salvando';
+  const escolhido = retratoDoAcervo(rascunho.portraitAssetId);
+
+  function escolherRetrato(portraitAssetId: string | null) {
+    setRascunho((atual) => ({ ...atual, portraitAssetId }));
+    setEscolherAberto(false);
+  }
 
   async function salvar() {
     setTocado(true);
@@ -65,7 +78,7 @@ export default function AdminFilosofoScreen() {
     } catch (falha) {
       setGravacao({
         estado: 'erro',
-        mensagem: falha instanceof Error ? falha.message : 'Não foi possível salvar.',
+        mensagem: mensagemDeErro(falha, 'Não foi possível salvar.'),
       });
     }
   }
@@ -96,25 +109,64 @@ export default function AdminFilosofoScreen() {
       apoio={
         criando
           ? 'Cadastre a identidade que será usada em todos os conteúdos.'
-          : `${existente?.nome ?? ''} • Identidade usada nos cards e na página do filósofo.`
+          : 'Identidade usada nos cards e na página do filósofo.'
       }
       topo={<BotaoVoltar rotulo="← FILÓSOFOS" aoVoltar={() => router.replace('/admin/filosofos')} />}
-      nota="A foto é opcional. Sem imagem, o app exibe a inicial do nome.">
-      <CaixaSecao titulo="01 · FOTO DO FILÓSOFO" espacamento="sm">
-        <Retrato nome={rascunho.nome} tamanho={160} />
+      nota="Para cadastrar conteúdo, basta escolher o filósofo da biblioteca. Sem retrato disponível, usar a inicial do nome.">
+      <CaixaSecao titulo="FOTO DO FILÓSOFO" espacamento="sm">
+        <Retrato nome={rascunho.nome} retratoId={rascunho.portraitAssetId} tamanho={160} />
+
+        <Text color="textSecondary">
+          {escolhido ? escolhido.nome : 'Nenhuma foto selecionada.'}
+        </Text>
+
+        <Text color="textSecondary">Retratos incluídos no app, sem envio de arquivos.</Text>
+
+        <Button
+          label={escolherAberto ? 'FECHAR ACERVO' : 'ESCOLHER DO ACERVO'}
+          type="secondary"
+          size="medium"
+          onPress={() => setEscolherAberto((aberto) => !aberto)}
+          style={styles.acao}
+          accessibilityState={{ expanded: escolherAberto }}
+        />
+
+        {escolherAberto ? (
+          <Linha>
+            <OpcaoDeRetrato
+              rotulo="Sem retrato"
+              ativa={rascunho.portraitAssetId === null}
+              aoEscolher={() => escolherRetrato(null)}
+            />
+
+            {ACERVO_DE_RETRATOS.map((retrato) => (
+              <OpcaoDeRetrato
+                key={retrato.id}
+                rotulo={retrato.nome}
+                retratoId={retrato.id}
+                ativa={rascunho.portraitAssetId === retrato.id}
+                aoEscolher={() => escolherRetrato(retrato.id)}
+              />
+            ))}
+          </Linha>
+        ) : null}
+
+        <Text variant="supportSemibold">Imagem / Texto alternativo e crédito</Text>
 
         {/*
-          O contrato `643:1269` pede upload de PNG/JPG/WebP validado no servidor.
-          O projeto ainda não tem Cloud Storage habilitado, então a tela mostra o
-          que vale hoje em vez de um botão que não leva a lugar nenhum.
+          Texto alternativo e crédito não são campos: vêm do acervo
+          (`643:1215`). Aparecem em leitura para a redação conferir o que o app
+          vai anunciar, sem poder divergir entre dois filósofos que usem a mesma
+          ilustração.
         */}
         <Text color="textSecondary">
-          O envio de foto ainda não está disponível: depende do Cloud Storage, que não está
-          habilitado neste projeto. Até lá, o app mostra a inicial do nome.
+          {escolhido
+            ? `${escolhido.textoAlternativo} ${escolhido.credito}`
+            : 'Texto alternativo e crédito vêm do acervo de imagens do app.'}
         </Text>
       </CaixaSecao>
 
-      <CaixaSecao titulo="02 · DADOS DO FILÓSOFO" espacamento="sm">
+      <CaixaSecao titulo="DADOS DO FILÓSOFO" espacamento="sm">
         <CampoTexto
           rotulo="Nome *"
           placeholder="Digite o nome do filósofo"
@@ -163,8 +215,48 @@ export default function AdminFilosofoScreen() {
   );
 }
 
+/** Um retrato do acervo como alternativa clicável. */
+function OpcaoDeRetrato({
+  rotulo,
+  retratoId = null,
+  ativa,
+  aoEscolher,
+}: {
+  rotulo: string;
+  retratoId?: string | null;
+  ativa: boolean;
+  aoEscolher: () => void;
+}) {
+  const { colors } = useTheme();
+
+  return (
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityState={{ selected: ativa }}
+      accessibilityLabel={rotulo}
+      onPress={aoEscolher}
+      style={[
+        styles.opcao,
+        { borderColor: ativa ? colors.accent : colors.border },
+        ativa && { backgroundColor: colors.selected },
+      ]}>
+      <Retrato nome={rotulo} retratoId={retratoId} tamanho={96} />
+      <Text variant="supportSemibold">{rotulo}</Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   acao: {
     paddingHorizontal: spacing['2xl'],
+    alignSelf: 'flex-start',
+  },
+  opcao: {
+    borderWidth: 2,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    gap: spacing.sm,
+    alignItems: 'center',
+    width: 140,
   },
 });

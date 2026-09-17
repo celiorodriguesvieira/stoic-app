@@ -172,7 +172,7 @@ export default function VerificarEmailScreen() {
         </View>
 
         <Text variant="bodySmall" color="textSecondary">
-          Sua conta já foi criada. Voltar ao login não apaga nada — você pode confirmar o e-mail
+          Sua conta já foi criada. Voltar ao login não apaga nada. Você pode confirmar o e-mail
           e entrar depois.
         </Text>
       </ScrollView>

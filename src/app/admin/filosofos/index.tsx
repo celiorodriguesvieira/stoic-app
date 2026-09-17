@@ -9,9 +9,10 @@ import { CaixaSecao, Linha, PaginaAdmin } from '@/components/admin/pagina';
 import { Retrato } from '@/components/admin/retrato';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
-import { semearFilosofos } from '@/lib/admin/repositorio';
+import { mensagemDeErro, semearFilosofos } from '@/lib/admin/repositorio';
 import { type Filosofo } from '@/lib/admin/tipos';
 import { useFilosofos } from '@/lib/admin/use-filosofos';
+import { retratoDoAcervo } from '@/lib/retratos';
 import { spacing } from '@/theme';
 
 /** Tela `643:947`. Um cadastro só para nome, foto e biografia. */
@@ -45,7 +46,7 @@ export default function AdminFilosofosScreen() {
           : `${novos} ${novos === 1 ? 'filósofo importado' : 'filósofos importados'}.`,
       );
     } catch (falha) {
-      setAviso(falha instanceof Error ? falha.message : 'Não foi possível importar.');
+      setAviso(mensagemDeErro(falha, 'Não foi possível importar.'));
       setFalhou(true);
     } finally {
       setSemeando(false);
@@ -55,9 +56,9 @@ export default function AdminFilosofosScreen() {
   return (
     <PaginaAdmin
       titulo="FILÓSOFOS"
-      apoio="Gerencie nome, foto e biografia em um único cadastro."
+      apoio="Consulte os filósofos e retratos disponíveis na biblioteca."
       topo={<EtiquetaAdmin />}
-      nota="Selecione EDITAR para atualizar a biografia. A foto é opcional: sem imagem, o app exibe a inicial do nome.">
+      nota="Ao escolher um filósofo no conteúdo, nome e retrato são preenchidos automaticamente.">
       <NavegacaoAdmin atual="filosofos" />
 
       <Linha>
@@ -134,13 +135,13 @@ function LinhaFilosofo({
 }) {
   return (
     <View style={styles.linha}>
-      <Retrato nome={nome} />
+      <Retrato nome={nome} retratoId={filosofo.portraitAssetId} />
 
       <View style={styles.identidade}>
         <Text>{nome}</Text>
         <Text color="textSecondary">
-          {filosofo.fotoUrl ? 'Foto cadastrada' : 'Sem foto'}
-          {filosofo.biografia.trim() ? '' : ' • sem biografia'}
+          {retratoDoAcervo(filosofo.portraitAssetId)?.nome ?? 'Sem retrato'}
+          {filosofo.biografia.trim() ? '' : ', sem biografia'}
         </Text>
       </View>
 

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/hooks/use-theme';
@@ -22,27 +23,52 @@ export function PaginaAdmin({ titulo, apoio, topo, nota, children }: PaginaAdmin
   const { colors } = useTheme();
 
   return (
-    <ScrollView
-      style={{ backgroundColor: colors.surface }}
-      contentContainerStyle={styles.rolagem}>
-      <View style={styles.coluna}>
-        {topo}
+    // O painel foi desenhado para desktop, mas abre no aparelho — e sem a área
+    // segura o topo da página ficava por baixo do relógio e do entalhe. As
+    // laterais entram por causa do entalhe em paisagem; embaixo, do indicador
+    // de início.
+    <SafeAreaView
+      edges={['top', 'bottom', 'left', 'right']}
+      style={[styles.area, { backgroundColor: colors.surface }]}>
+      <ScrollView
+        style={{ backgroundColor: colors.surface }}
+        contentContainerStyle={styles.rolagem}
+        // O teclado cobria o campo em foco. Ajustar o recuo da rolagem, e não
+        // envolver num `KeyboardAvoidingView` como fazem as telas de login, é
+        // o que funciona aqui: os formulários do painel são longos, e só o
+        // recuo faz o iOS rolar até o campo em foco. Encolher a área, sozinho,
+        // deixaria o campo fora da vista do mesmo jeito.
+        automaticallyAdjustKeyboardInsets
+        // Tocar em "Salvar" com o teclado aberto tem de valer na primeira vez,
+        // em vez de o primeiro toque só fechar o teclado.
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive">
+        <View style={styles.coluna}>
+          {topo}
 
-        <Text variant="headingLarge" accessibilityRole="header">
-          {titulo}
-        </Text>
+          <Text variant="headingLarge" accessibilityRole="header">
+            {titulo}
+          </Text>
 
-        {apoio ? <Text variant="supportSemibold">{apoio}</Text> : null}
+          {apoio ? <Text variant="bodyMedium">{apoio}</Text> : null}
 
-        {children}
+          {children}
 
-        {nota ? <Text variant="supportSemibold">{nota}</Text> : null}
-      </View>
-    </ScrollView>
+          {nota ? <Text variant="supportSemibold">{nota}</Text> : null}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
-/** Caixa de seção: fundo `bg/canvas`, padding 24. Nós `595:1138`, `596:1151`, `597:57`. */
+/**
+ * Caixa de seção: fundo `bg/canvas`, padding 24. Nós `595:1138`, `596:1151`,
+ * `597:57`.
+ *
+ * Tipografia medida no `668:202`: título de seção em 22/28 (`headingMedium`),
+ * apoio em 16/22 (`bodyMedium`), rótulo de campo em 14 semibold. Estavam todos
+ * em 14 semibold, o que achatava a hierarquia e deixava a tela sem respiro.
+ */
 export function CaixaSecao({
   titulo,
   apoio,
@@ -63,8 +89,8 @@ export function CaixaSecao({
         styles.caixa,
         { backgroundColor: colors.canvas, gap: spacing[espacamento] },
       ]}>
-      {titulo ? <Text variant="supportSemibold">{titulo}</Text> : null}
-      {apoio ? <Text variant="supportSemibold">{apoio}</Text> : null}
+      {titulo ? <Text variant="headingMedium">{titulo}</Text> : null}
+      {apoio ? <Text variant="bodyMedium">{apoio}</Text> : null}
       {children}
     </View>
   );
@@ -76,8 +102,17 @@ export function Linha({ children }: { children: ReactNode }) {
 }
 
 const styles = StyleSheet.create({
+  area: {
+    flex: 1,
+  },
   rolagem: {
-    padding: spacing['2xl'],
+    paddingHorizontal: spacing['2xl'],
+    // 16px depois da área segura, como manda o contrato editorial: "posicionar
+    // o início do cabeçalho em safeAreaTop + 16 px… não somar duas vezes
+    // quando o contêiner já a aplica". O `SafeAreaView` em volta é quem aplica
+    // a área segura; aqui só entra o respiro de 16.
+    paddingTop: spacing.lg,
+    paddingBottom: spacing['2xl'],
     alignItems: 'center',
   },
   coluna: {

@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
+import { Voltar } from '@/components/ui/voltar';
 import { TextField } from '@/components/ui/text-field';
 import { useTheme } from '@/hooks/use-theme';
 import { isFirebaseConfigured, useAuth } from '@/lib/auth-context';
@@ -80,7 +81,7 @@ function mensagemDoErro(erro: unknown): string {
     case 'auth/user-disabled':
       return 'Esta conta está desativada.';
     case 'auth/network-request-failed':
-      return 'Sem conexão. Seus dados foram mantidos — tente de novo.';
+      return 'Sem conexão. Seus dados foram mantidos. Tente de novo.';
     case 'auth/too-many-requests':
       return 'Muitas tentativas. Aguarde um momento e tente de novo.';
     default:
@@ -160,6 +161,8 @@ export default function EntrarScreen() {
           <Text variant="labelButton" color="wine">
             PAUSA
           </Text>
+
+          <Voltar destino="Boas-vindas" aoVoltar={() => router.replace('/(auth)')} />
 
           <View style={styles.introducao}>
             <Text variant="headingLarge" accessibilityRole="header">

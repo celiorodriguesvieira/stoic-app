@@ -13,13 +13,17 @@ import {
   arquivarConteudo,
   ErroPedeConfirmacao,
   observarConteudos,
+  mensagemDeErro,
   restaurarConteudo,
+  traduzirErro,
 } from '@/lib/admin/repositorio';
 import {
   aplicacaoVinculada,
   NIVEIS,
+  niveisCompletos,
   niveisPreenchidos,
   ROTULO_STATUS,
+  ROTULO_TIPO,
   type Conteudo,
 } from '@/lib/admin/tipos';
 import { useFilosofos } from '@/lib/admin/use-filosofos';
@@ -79,10 +83,10 @@ export default function AdminConteudosScreen() {
 
   return (
     <PaginaAdmin
-      titulo="CONTEÚDOS"
+      titulo="ACERVO EDITORIAL"
       apoio="Um cadastro. Todos os caminhos do PAUSA."
       topo={<EtiquetaAdmin />}
-      nota="O mesmo formulário é usado para criar e editar. Arquivar tira do app sem apagar o registro.">
+      nota="O card só aparece na Home após publicação pelo admin e início da semana escolhida. Rascunhos não aparecem no app.">
       <NavegacaoAdmin atual="conteudos" />
 
       <Linha>
@@ -98,7 +102,15 @@ export default function AdminConteudosScreen() {
         </View>
 
         <Button
-          label="NOVO CONTEÚDO"
+          label="NOVO CONTEÚDO DA SEMANA"
+          size="medium"
+          onPress={() => router.push('/admin/aula/novo')}
+          style={styles.novo}
+        />
+
+        <Button
+          label="NOVO CONTEÚDO / EXPLORAR"
+          type="secondary"
           size="medium"
           onPress={() => router.push('/admin/conteudo/novo')}
           style={styles.novo}
@@ -125,6 +137,9 @@ export default function AdminConteudosScreen() {
             TÍTULO / AUTOR
           </Text>
           <Text variant="supportSemibold" style={styles.colCurta}>
+            TIPO
+          </Text>
+          <Text variant="supportSemibold" style={styles.colCurta}>
             NÍVEIS
           </Text>
           <Text variant="supportSemibold" style={styles.colCurta}>
@@ -146,7 +161,7 @@ export default function AdminConteudosScreen() {
         ) : conteudos.length === 0 ? (
           <Vazio
             titulo="Nenhum conteúdo cadastrado ainda."
-            apoio="Comece por “Novo conteúdo”."
+            apoio="Comece por “Novo conteúdo da semana”."
           />
         ) : filtrados.length === 0 ? (
           <Vazio
@@ -163,7 +178,13 @@ export default function AdminConteudosScreen() {
               key={conteudo.id}
               conteudo={conteudo}
               autor={nomeDoFilosofo(conteudo.autorId)}
-              aoEditar={() => router.push(`/admin/conteudo/${conteudo.id}`)}
+              aoEditar={() =>
+                router.push(
+                  conteudo.tipo === 'aula'
+                    ? `/admin/aula/${conteudo.id}`
+                    : `/admin/conteudo/${conteudo.id}`,
+                )
+              }
             />
           ))
         )}
@@ -195,6 +216,13 @@ function LinhaConteudo({
   const nome = conteudo.titulo || 'conteúdo sem título';
   const arquivado = conteudo.status === 'arquivado';
 
+  // "Pronto" quer dizer coisas diferentes: no artigo é o texto daquele nível
+  // escrito; na aula são as quatro etapas do nível completas.
+  const prontos =
+    conteudo.tipo === 'aula'
+      ? niveisCompletos(conteudo.aula.etapas).length
+      : niveisPreenchidos(conteudo.textos).length;
+
   function perguntar() {
     setEtapa('perguntando');
     setFalhou(false);
@@ -221,7 +249,7 @@ function LinhaConteudo({
       setEtapa('ocioso');
       setMensagem(null);
     } catch (falha) {
-      const erro = falha instanceof Error ? falha : new Error('Não foi possível arquivar.');
+      const erro = traduzirErro(falha instanceof Error ? falha : new Error('Não foi possível arquivar.'));
 
       setEtapa('perguntando');
       setMensagem(erro.message);
@@ -243,7 +271,7 @@ function LinhaConteudo({
       setMensagem(`Restaurado como ${ROTULO_STATUS[destino].toLocaleLowerCase('pt-BR')}.`);
     } catch (falha) {
       setEtapa('ocioso');
-      setMensagem(falha instanceof Error ? falha.message : 'Não foi possível restaurar.');
+      setMensagem(mensagemDeErro(falha, 'Não foi possível restaurar.'));
       setFalhou(true);
     }
   }
@@ -252,15 +280,23 @@ function LinhaConteudo({
     <View style={styles.bloco}>
       <View style={styles.linhaConteudo}>
         <Text style={styles.colTitulo}>
-          {conteudo.titulo || 'Sem título'} · {autor}
+          {conteudo.titulo || 'Sem título'}
+          {'\n'}
+          {autor}
+        </Text>
+
+        <Text style={styles.colCurta}>{ROTULO_TIPO[conteudo.tipo]}</Text>
+
+        <Text style={styles.colCurta}>
+          {prontos} de {NIVEIS.length}
         </Text>
 
         <Text style={styles.colCurta}>
-          {niveisPreenchidos(conteudo.textos).length} de {NIVEIS.length}
-        </Text>
-
-        <Text style={styles.colCurta}>
-          {aplicacaoVinculada(conteudo.aplicacao) ? 'Vinculado' : 'Não vinculado'}
+          {conteudo.tipo === 'aula'
+            ? 'Não se aplica'
+            : aplicacaoVinculada(conteudo.aplicacao)
+              ? 'Vinculado'
+              : 'Não vinculado'}
         </Text>
 
         <Text style={styles.colCurta}>{ROTULO_STATUS[conteudo.status]}</Text>

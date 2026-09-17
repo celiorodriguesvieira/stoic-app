@@ -3,14 +3,34 @@
 Diário para retomar o trabalho sem depender de memória. Atualize a cada sessão:
 mova o que foi feito para "Histórico" e revise "Próximos passos".
 
-**Última atualização:** 2026-09-14 (sessão da noite de 13/09)
+**Última atualização:** 2026-09-16 (cadastro da aula semanal)
 **Figma:** [APP — TCC](https://www.figma.com/design/4ZvYZeKHrKGtUlSEEzedEp/APP---TCC)
 
 ---
 
 ## Retomar aqui
 
-**O passo que eu faria primeiro:** abrir o app e olhar. Nada do que foi
+**O passo que eu faria primeiro:** cadastrar uma aula de verdade. O caminho
+inteiro existe desde 16/09 e nunca foi percorrido com sessão real:
+
+```
+/admin → NOVA AULA / 4 ETAPAS → preencher os quatro níveis
+      → REVISAR PUBLICAÇÃO → PUBLICAR CONTEÚDO
+      → /admin/programacao → escolher a aula → programar a semana
+```
+
+Antes disso, **importar os filósofos** (`/admin/filosofos` → "Importar os seis
+do código"): sem eles o seletor "Filósofo principal do card" abre vazio e a
+aula não passa da identificação.
+
+**O que ainda não fecha o ciclo:** a Home não lê a edição ativa. Programar a
+semana grava a edição, mas o app continua mostrando o card de exemplo.
+
+---
+
+### Antes disso (pendência de 14/09)
+
+**Abrir o app e olhar.** Nada do que foi
 construído nas últimas duas sessões jamais renderizou — nem o fluxo de entrada
 inteiro, nem as **seis telas do painel `/admin`**, nem o porteiro de quatro
 estados que decide quem entra nele. É muito código escrito às cegas.
@@ -28,7 +48,8 @@ já estão gravadas no navegador. Para o painel, `http://localhost:8081/admin`
 1. Catálogo vazio → **Novo conteúdo** → preencher um nível só → Salvar rascunho
 2. "Revisar publicação" deve estar **bloqueado** até os quatro níveis
 3. Preencher os quatro → Revisar → checklist e prévia → **Publicar**
-4. Conhecimento do dia: programar uma data; repetir a data deve **perguntar**
+4. Programação semanal: programar um período; período que cruze outro deve
+   **perguntar** antes de substituir
 5. Usuários: você aparece com "SEU ACESSO" desabilitado
 
 **Depois disso**, o buraco mais óbvio: **não existe "sair da conta" no app**.
@@ -269,9 +290,10 @@ do simulador).
 | Onboarding 01 e 02 | `src/app/onboarding.tsx` | `55:6`, `55:50` |
 | Abas (Hoje, Explorar, Atividades, Biblioteca) | `src/app/(tabs)/` | — |
 | Admin · Conteúdos | `src/app/admin/index.tsx` | `595:3` |
-| Admin · Editor | `src/app/admin/conteudo/[id].tsx` | `595:4` |
+| Admin · Editor de artigo | `src/app/admin/conteudo/[id].tsx` | `595:4` |
+| Admin · Aula em quatro etapas | `src/app/admin/aula/[id].tsx` | `668:202` |
 | Admin · Revisar e publicar | `src/app/admin/revisar/[id].tsx` | `595:5` |
-| Admin · Conhecimento do dia | `src/app/admin/conhecimento-do-dia.tsx` | `595:7` |
+| Admin · Programação semanal | `src/app/admin/programacao.tsx` | `595:7` |
 | Admin · Usuários e permissões | `src/app/admin/usuarios/index.tsx` | `595:6` |
 | Admin · Alterar permissão | `src/app/admin/usuarios/[uid].tsx` | `595:8` |
 | Admin · Filósofos | `src/app/admin/filosofos/index.tsx` | `643:947` |
@@ -322,6 +344,26 @@ Regras que o código faz valer, do contrato:
   do que já foi ao ar;
 - a aplicação cotidiana é um registro só, exibido em dois caminhos;
 - a agenda guarda referência ao conteúdo, nunca cópia do texto;
+- **a aula é o registro do destaque** (2026-09-16): artigo e aula dividem a
+  coleção `conteudos` e o catálogo (`672:1248`), separados pelo campo `tipo`.
+  Documento gravado antes de 16/09 não tem o campo e é lido como `artigo`;
+  cada tipo abre no seu editor, e abrir um pelo endereço do outro redireciona
+  em vez de gravar por cima;
+- **a programação só aceita aula publicada** (`671:1249`): o destaque da Home é
+  a experiência de quatro etapas, e um artigo programado abriria a Home num
+  formato que a tela do Conhecimento da semana não sabe mostrar;
+- **as opções da reflexão têm id próprio**, sorteado uma vez: é o id que a
+  resposta da pessoa vai guardar, e identificar a opção pela posição faria
+  reordenar a lista reescrever o que já foi respondido;
+- **publicar não coloca na Home**: só a edição da Programação semanal coloca —
+  é o "publicar conteúdo sozinho não o coloca automaticamente na Home" do
+  contrato;
+- **o destaque é semanal** (2026-09-15): `programarEdicao` grava `inicio`
+  (inclusivo) e `fim` (exclusivo, sete dias depois), e recusa período que cruze
+  outra edição — "uma única edição ativa por vez" (`671:1237`). Cruzamento vira
+  pergunta e a tela reenvia com o id de quem será substituído. Registros da
+  agenda diária antiga (campo `data`) são lidos como a semana que começa
+  naquele dia;
 - conflito de edição por número de versão — recusa gravar sobre versão mais nova;
 - data ocupada na agenda vira pergunta, não erro;
 - ninguém altera o próprio papel; o último administrador não perde o acesso;
@@ -356,6 +398,56 @@ e nunca persiste a senha.
 
 ### No código
 
+- [ ] **O papel vem do perfil no Firestore, não de custom claim.** O contrato
+      do acesso ao painel (`646:106`) pede `role === "admin"` no token do
+      Firebase, atribuída pelo Admin SDK (`646:108`). Hoje `usuarios/{uid}.papel`
+      faz esse papel — as regras impedem autoatribuição, então não é buraco de
+      segurança, mas diverge do contrato e da etapa 1 da ordem de implementação
+- [ ] **Seguir a ordem de implementação do contrato** (`675:1256`): 1. auth,
+      papel admin e regras de dados · 2. autores e temas · 3. acervo, rascunhos
+      e versões · 4. validação, prévia e publicação · 5. atividades e recursos
+      externos · 6. programação e curadoria · 7. consultas do app · 8. testes de
+      aceite. As etapas 3, 4 e 6 foram feitas antes de 1 e 2 estarem fechadas
+- [x] ~~**PUBLICAR AS SECURITY RULES**~~ — **feito em 2026-09-16**. O bloco
+      `match /filosofos` estava só no repositório desde 15/09; era a única
+      diferença de regra entre o arquivo e o servidor, e travou o painel
+      inteiro por uma sessão. O diagnóstico só ficou incontestável quando a
+      tela de Usuários carregou: listar usuários exige `ehAdmin()` verdadeiro
+      no servidor, o que provou que o papel estava certo e sobrou uma única
+      explicação possível
+- [ ] **Conferir a programação com os campos novos**: data e horário de início
+      e término nunca renderizaram com sessão. Sem permissão de leitura da
+      agenda, a tela mostra o erro no lugar do formulário inteiro — o que é
+      outra coisa a rever, já que criar uma edição não deveria sumir da tela
+      porque a lista não carregou
+- [ ] **Percorrer o cadastro da aula com sessão de verdade**: criar, preencher
+      os quatro níveis, revisar, publicar e programar. Nada disso foi exercitado
+      contra o Firestore — só com `EXPO_PUBLIC_AUTH_BYPASS=true`, que mostra as
+      telas mas não grava
+- [ ] **O atalho de desenvolvimento não alcança o app.** Com
+      `EXPO_PUBLIC_AUTH_BYPASS=true` não há usuário do Firebase, então
+      `uid` é nulo, `carregar(uid)` devolve sempre `onboardingDone: false` e a
+      guarda manda para o onboarding — que também não conclui, porque concluir
+      grava por UID. Resultado: **nenhuma tela atrás do onboarding pode ser
+      vista sem conta de verdade**, e foi assim que o painel inteiro acabou
+      escrito às cegas. Ou o bypass passa a usar um uid fictício, ou ele serve
+      só para as telas de entrada
+- [x] ~~**A Home ainda não lê a edição ativa.**~~ O card semanal continua sendo o
+      exemplo fixo de Marco Aurélio no código. Falta ler a agenda
+      (`inicio <= hoje < fim`), buscar a aula referenciada e montar o card com
+      a frase de destaque, a duração e o filósofo — e, sem edição ativa,
+      ocultar o destaque e oferecer Explorar, como manda o contrato
+- [ ] **A aula publicada não tem leitor no app**: as quatro etapas existem no
+      cadastro e na prévia do painel, mas ninguém as percorre (`61:6`–`61:9`).
+      É o próximo passo depois da Home
+- [ ] **Campos do `668:202` que ficaram de fora**: "Atividade relacionada
+      (opcional)" — não existe coleção de atividades, e um seletor vazio seria
+      pior do que a ausência
+- [ ] **`NOVO RECURSO / BIBLIOTECA` (`672:1245`) não foi criado**: a Biblioteca
+      não tem cadastro nem coleção. O botão entra quando o `668:203` existir
+- [ ] **Erro do Firestore aparece em inglês** no catálogo sem sessão ("Missing
+      or insufficient permissions"). A mensagem vem crua do SDK e devia ser
+      traduzida como as outras
 - [ ] **Os interruptores de Preferências só guardam a escolha.** "Conhecimento
       do dia" não muda a Home; "Reduzir animações" e "Texto ampliado" não
       alteram a renderização. Ficam no aparelho, por conta (`pausa:{uid}:
@@ -375,17 +467,27 @@ e nunca persiste a senha.
 - [ ] **Atividades** (`644:95`): o contrato inteiro está desenhado e nada foi
       implementado. Três tipos num editor condicionado, prévia, versão pública
       preservada até republicar, registro de conclusão por tentativa
-- [ ] **Foto do filósofo**: depende de habilitar o Cloud Storage (conferir se
-      exige plano Blaze), escrever `storage.rules` e acrescentar o bloco
-      `storage` no `firebase.json`. Hoje a tela explica a ausência em vez de
-      mostrar um botão que não leva a nada
+- [x] ~~**Foto do filósofo**: depende de habilitar o Cloud Storage~~ —
+      **encerrado em 16/09 por decisão do contrato** (`668:167`): "Cloud Storage
+      não será ativado. Retratos e miniaturas são assets distribuídos". Virou o
+      acervo em `src/lib/retratos.ts`. `668:166` diz o mesmo para áudio e vídeo:
+      URL HTTPS de provedor externo
+- [ ] **A tela `595:7` tem dois campos que ficaram de fora**: "atividade
+      recomendada" e "seleção da Biblioteca" (até 12 itens). Nenhuma das duas
+      coleções existe no código — entram quando Atividades e Biblioteca
+      existirem
 - [ ] **Exercitar o arquivamento com sessão de verdade**: arquivar um conteúdo,
       conferir que ele sai do catálogo, aparecer em "Mostrar arquivados",
       restaurar e ver se volta ao status que tinha. E o caso da pergunta:
       programar um destaque, arquivar o conteúdo e confirmar que desmarca a data
-- [ ] Publicar as `firestore.rules` de novo? **Não é preciso** — o arquivamento
-      usa `update`, que as regras já permitiam para editor; nada mudou no arquivo
-      além de comentários
+- [x] ~~Publicar as `firestore.rules` de novo? **Não é preciso**~~ — **esta
+      conclusão estava errada e custou uma sessão.** Ela valia para o
+      arquivamento, mas em 15/09 o arquivo ganhou o bloco `match /filosofos`, e
+      isso **nunca foi publicado**. Em 16/09 o painel dava "Missing or
+      insufficient permissions" em toda a tela de filósofos: o `ruleset` ativo
+      era de 2026-09-14 e o `match /{document=**} { allow read, write: if false }`
+      negava a coleção. **Regra nova no arquivo = republicar, sempre**:
+      `npx firebase-tools deploy --only firestore:rules --project pausa-cc7f3`
 - [ ] Criar a primeira conta pelo app e promovê-la a `administrador` no Console
       (Firestore → `usuarios/{uid}` → campo `papel`)
 - [ ] Rodar no simulador e no navegador e comparar tudo com o Figma
@@ -426,6 +528,22 @@ e nunca persiste a senha.
       fonte variável
 - [ ] Os textos "Dados abaixo são exemplos" e "Exemplos editoriais" já não valem:
       os dados vêm do Firestore
+- [ ] **Cadastro, Entrar e Onboarding 02 não desenham controle de voltar.** No
+      iPhone não há botão físico, então as três eram becos sem saída; o código
+      pôs "← VOLTAR". No **painel** a ausência é proposital — "admin desktop:
+      navegação administrativa própria, sem hambúrguer do app" (`654:1759`) —,
+      **mas isso deixa o painel sem saída em tela de celular**. Decidir se o
+      painel ganha uma saída desenhada ou se deixa de ser aberto no aparelho
+- [ ] A barra `596:9` desenha **oito** itens; o código tem quatro. Faltam
+      ATIVIDADES, EXPLORAR, BIBLIOTECA e TEMAS, cujas telas não existem
+- [ ] `595:7` tem "SALVAR RASCUNHO" e "REVISAR PROGRAMAÇÃO", mas **não existe
+      tela de revisão da programação** no arquivo, nem estado de rascunho para a
+      edição. O código continua com uma ação só, que programa direto
+- [ ] `668:202` põe "Filósofo principal do card, temas e duração" num campo só;
+      no código são três controles, porque um campo de texto livre não dá para
+      escolher filósofo nem marcar tema
+- [ ] `668:202` não mostra o que acontece quando a aula ainda não tem nenhum
+      nível completo — a tela desenhada já está preenchida
 - [ ] O catálogo `595:3` só tem EDITAR em cada linha. O código passou a ter
       ARQUIVAR (com confirmação na própria linha) e RESTAURAR, além do botão
       "Mostrar arquivados" — desenhar isso, junto com o status "Arquivado" na
@@ -495,7 +613,92 @@ sempre Home" como remoção do cadastro do fluxo, o que precisou ser revertido.
 
 ---
 
+### Sessão de 2026-09-16 com Claude Code
+
+**Conduzido pelo autor:** desenhou no Figma a página 12 inteira — o contrato
+editorial (`667:101`), a tela da aula em quatro etapas (`668:202`), a
+programação por período (`595:7`) e os cadastros de atividade, biblioteca,
+temas e mídia. Decidiu que o cadastro da aula semanal era a prioridade e
+apontou o nó.
+
+**Feito pela IA:** implementou o cadastro da aula a partir do `668:202` —
+modelo de dados, validação, editor, prévia e checklist de publicação — e ligou
+a programação semanal à aula publicada.
+
+**Onde a IA discordou ou propôs outro caminho:**
+
+- a IA tinha começado a ligar a Home à edição ativa; o autor interrompeu e
+  redirecionou para o cadastro — sem aula cadastrada não há o que a Home
+  mostrar, e a ordem do autor era a certa;
+- o Figma junta "filósofo, temas e duração" num campo de texto só; a IA
+  separou em três controles, porque texto livre não escolhe filósofo nem marca
+  tema — e registrou a divergência na lista do Figma;
+- a IA deixou de fora dois campos desenhados ("Atividade relacionada" e o botão
+  "Novo recurso / Biblioteca") por não existirem as coleções: um seletor vazio
+  e um botão que não leva a lugar nenhum enganam mais do que a ausência;
+- o contrato pede id estável nas opções da reflexão; a IA sorteia o id na
+  criação em vez de usar a posição, para que reordenar a lista não reescreva
+  respostas já dadas;
+- a primeira versão do editor despejava as trinta e seis pendências de uma aula
+  em branco num aviso só; a IA repartiu em identificação, nível em edição e
+  níveis restantes depois de ver a tela renderizada.
+
+**Verificação:** `npx tsc --noEmit` passa; `npx expo lint` só acusa o padrão de
+refs que já existia. As três telas novas foram renderizadas no Chromium
+headless (1360 px) com o console limpo — a primeira vez que uma tela do painel
+foi conferida com os olhos antes de ser dada por pronta.
+
+---
+
 ## Histórico
+
+### 2026-09-16
+
+- **Regras publicadas e primeiro filósofo gravado.** Fim do bloqueio que
+  atravessou a sessão: `filosofos` passou a existir para o servidor
+
+- **Home ligada ao Firestore** (`327:403`): saudação por hora do aparelho com o
+  nome do cadastro, card do Conhecimento da semana vindo da **edição ativa**, e
+  os dois atalhos ("Explore ideias" e "Aplique no dia-a-dia"). Sem edição ativa,
+  o destaque some e a tela oferece Explorar, como manda o contrato — em vez de
+  repescar a semana vencida. Saíram do código os dados de exemplo: a citação
+  fixa de Marco Aurélio, as grades de Autores e Temas e o carrossel "Continue
+  lendo", que não existiam no desenho e fingiam um acervo que ninguém cadastrou
+- **"Continue de onde parou" fica oculto**: o próprio handoff manda esconder
+  sem histórico, e o app não grava posição de leitura em lugar nenhum
+- **O card semanal deixou de ser citação**: passou a mostrar a
+  `weeklyCardPhrase` da aula, sem aspas — "não atribuir frase editorial como
+  citação literal" (`668:128`)
+- **Programação por instante** (`595:7`, ajuste da tarde): o período deixou de
+  ser duas datas e passou a ser **data + horário de início e de término**, em
+  DD/MM/AAAA e HH:MM. O término virou campo editável — vem preenchido com sete
+  dias e acompanha o início até alguém mexer nele. O **seletor de fuso saiu**:
+  Brasília é fixo, e é isso que permite comparar períodos como texto
+- **Acervo de retratos** (`src/lib/retratos.ts`): o cadastro de filósofos
+  deixou de depender de upload. `fotoUrl` virou `portraitAssetId`, o botão
+  virou "ESCOLHER DO ACERVO", e texto alternativo e crédito passaram a vir da
+  imagem, não do formulário
+- **Área segura e teclado no painel**: `PaginaAdmin` ganhou `SafeAreaView` e
+  ajuste de recuo do teclado. O cabeçalho começa em `safeAreaTop + 16px`, como
+  o contrato manda
+- **Saídas que não existiam**: "← APP" na barra do painel (as quatro telas de
+  primeiro nível não tinham volta ao app) e "← VOLTAR" em Criar conta, Entrar e
+  Onboarding 02 — no iPhone não há botão físico, e as três eram becos sem saída
+- **Erro do Firestore em português** (`traduzirErro`), com a causa provável
+  nomeada em `permission-denied`
+- **Cadastro da aula semanal** implementado a partir do `668:202`: identificação
+  (título, frase de destaque de 10–80 caracteres, filósofo, temas, duração) e
+  as quatro etapas — Conteúdo, Reflexão, Aplicação, Conclusão — em cada um dos
+  quatro níveis
+- Artigo e aula passaram a dividir a coleção `conteudos`, separados pelo campo
+  `tipo`; o catálogo ganhou a coluna TIPO e os botões "NOVA AULA / 4 ETAPAS" e
+  "NOVO ARTIGO", e cada linha abre no editor do seu tipo
+- Revisão e publicação passaram a validar a aula: prévia das quatro etapas na
+  ordem do app e checklist com frase do card, duração e os quatro níveis
+- Programação semanal passou a oferecer **só aula publicada** (`671:1249`)
+- `paraRascunho` centralizou a conversão documento → formulário, para campo
+  novo não ficar de fora de um editor sem ninguém perceber
+
 
 ### 2026-09-13
 

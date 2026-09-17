@@ -97,7 +97,7 @@ function OpcaoAvatar({
       ]}>
       <Avatar nome={nome} avatarId={avatarId} tamanho={80} />
 
-      <Text variant="bodySmall">{atual ? `${rotulo} · atual` : rotulo}</Text>
+      <Text variant="bodySmall">{atual ? `${rotulo} (atual)` : rotulo}</Text>
     </Pressable>
   );
 }

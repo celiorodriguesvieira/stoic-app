@@ -42,7 +42,7 @@ export function MenuSeuEspaco({ aberto, aoFechar }: { aberto: boolean; aoFechar:
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
-  const { user, perfil, podeAdministrar, papelIndefinido, sair } = useAuth();
+  const { user, perfil, sair } = useAuth();
 
   const [semMovimento, setSemMovimento] = useState(false);
 
@@ -68,7 +68,7 @@ export function MenuSeuEspaco({ aberto, aoFechar }: { aberto: boolean; aoFechar:
   const nome = perfil?.nome || user?.displayName || '';
 
   /** Sai do menu antes de navegar: o item 12 não quer menu dentro de menu. */
-  function irPara(rota: '/perfil' | '/preferencias' | '/admin') {
+  function irPara(rota: '/perfil' | '/preferencias') {
     aoFechar();
     router.push(rota);
   }
@@ -151,27 +151,17 @@ export function MenuSeuEspaco({ aberto, aoFechar }: { aberto: boolean; aoFechar:
             </View>
 
             {/*
-              Item 08: o link só aparece com papel confirmado. Enquanto o perfil
-              carrega (`papelIndefinido`), não se revela nem se reserva espaço —
-              e o contrato manda não mostrar para usuário comum nem para editor.
+              Não há entrada para o painel aqui, e isso é decisão de desenho,
+              não esquecimento: "abrir o endereço /admin diretamente no
+              navegador; não há botão, escudo ou link para o painel dentro do
+              menu do aplicativo" (`646:103`), com o aceite "menu do app sem
+              entrada administrativa em todas as contas".
+
+              O mesmo handoff avisa que esconder o item não é proteção — quem
+              barra é `admin/_layout.tsx` com o papel do servidor, e as Security
+              Rules com os dados. Tirar o botão só deixa de anunciar o painel
+              para quem não vai usá-lo no celular.
             */}
-            {!papelIndefinido && podeAdministrar ? (
-              <View style={styles.apoio}>
-                <Pressable
-                  accessibilityRole="link"
-                  accessibilityLabel="Painel administrativo"
-                  onPress={() => irPara('/admin')}
-                  style={[styles.painelAdmin, { backgroundColor: colors.selected }]}>
-                  <Escudo />
-                  <Text>Painel administrativo</Text>
-                </Pressable>
-
-                <Text variant="bodySmall" color="textSecondary">
-                  Gerencie conteúdos, filósofos e atividades.
-                </Text>
-              </View>
-            ) : null}
-
             <SairDaConta
               aoSair={sair}
               aoFechar={aoFechar}
@@ -198,20 +188,6 @@ function BotaoFechar({ aoFechar }: { aoFechar: () => void }) {
         <View style={[styles.barraXis, styles.barraEsquerda, { backgroundColor: colors.text }]} />
       </View>
     </Pressable>
-  );
-}
-
-/** Escudo do item 08, desenhado sem asset — decorativo para o leitor de tela. */
-function Escudo() {
-  const { colors } = useTheme();
-
-  return (
-    <View
-      accessibilityElementsHidden
-      importantForAccessibility="no-hide-descendants"
-      style={[styles.escudo, { borderColor: colors.text }]}>
-      <View style={[styles.escudoMarca, { backgroundColor: colors.text }]} />
-    </View>
   );
 }
 
@@ -403,27 +379,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.xs,
-  },
-  painelAdmin: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.lg,
-    minHeight: 80,
-    padding: spacing.lg,
-    borderRadius: radius.md,
-  },
-  escudo: {
-    width: 24,
-    height: 24,
-    borderWidth: 2,
-    borderRadius: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  escudoMarca: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
   },
   alvo: {
     width: minTouchTarget,

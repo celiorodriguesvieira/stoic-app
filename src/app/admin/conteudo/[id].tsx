@@ -19,7 +19,7 @@ import {
   conteudoVazio,
   FORMATOS,
   NIVEIS,
-  niveisPreenchidos,
+  paraRascunho,
   pendenciasParaPublicar,
   ROTULO_FORMATO,
   ROTULO_NIVEL,
@@ -84,15 +84,7 @@ export default function AdminEditorScreen() {
         if (!hidratado.current) {
           hidratado.current = true;
           versaoCarregada.current = conteudo.versao;
-          setRascunho({
-            titulo: conteudo.titulo,
-            autorId: conteudo.autorId,
-            formato: conteudo.formato,
-            temaIds: conteudo.temaIds,
-            fonte: conteudo.fonte,
-            textos: conteudo.textos,
-            aplicacao: conteudo.aplicacao,
-          });
+          setRascunho(paraRascunho(conteudo));
           setStatus(conteudo.status);
           return;
         }
@@ -145,6 +137,16 @@ export default function AdminEditorScreen() {
         versaoCarregada.current = 1;
         hidratado.current = true;
         setIdAtual(novoId);
+
+        // O endereço passa a ser o do documento recém-criado.
+        //
+        // Sem isto a URL continuava `/novo` depois de gravar: recarregar a
+        // página abria um formulário em branco, o rascunho ficava no banco sem
+        // ninguém saber o id, e o próximo salvamento criava **outro**
+        // documento. `replace` e não `push` para o botão voltar do navegador
+        // não devolver ao formulário vazio.
+        router.replace(`/admin/conteudo/${novoId}`);
+
         setGravacao({ estado: 'salvo', em: Date.now() });
         return novoId;
       }
@@ -174,7 +176,6 @@ export default function AdminEditorScreen() {
     if (salvo) router.push(`/admin/revisar/${salvo}`);
   }
 
-  const preenchidos = niveisPreenchidos(rascunho.textos).length;
   const pendencias = pendenciasParaPublicar(rascunho);
 
   if (carregando) {
@@ -201,8 +202,8 @@ export default function AdminEditorScreen() {
 
   return (
     <PaginaAdmin
-      titulo={criando && !idAtual ? 'NOVO CONTEÚDO' : 'EDITAR CONTEÚDO'}
-      apoio={`${ROTULO_STATUS[status]}${rascunho.titulo ? ` • ${rascunho.titulo}` : ''}`}
+      titulo="CADASTRAR CONTEÚDO / EXPLORAR"
+      apoio={rascunho.titulo || ROTULO_STATUS[status]}
       topo={<BotaoVoltar rotulo="← CONTEÚDOS" aoVoltar={() => router.replace('/admin')} />}>
       {conflito ? (
         <ErroRecuperavel
@@ -216,7 +217,7 @@ export default function AdminEditorScreen() {
         />
       ) : null}
 
-      <CaixaSecao titulo="01 · INFORMAÇÕES GERAIS" espacamento="sm">
+      <CaixaSecao titulo="INFORMAÇÕES GERAIS" espacamento="sm">
         <CampoTexto
           rotulo="Título"
           placeholder="O tempo que é seu"
@@ -269,7 +270,7 @@ export default function AdminEditorScreen() {
 
       <View style={styles.secaoNiveis}>
         <Text variant="supportSemibold">
-          02 · TEXTO POR NÍVEL — {preenchidos} DE {NIVEIS.length} PREENCHIDOS
+          TEXTO POR NÍVEL
         </Text>
 
         <Linha>
@@ -288,7 +289,7 @@ export default function AdminEditorScreen() {
       </View>
 
       <CampoTexto
-        rotulo={`Texto · ${ROTULO_NIVEL[nivel]}`}
+        rotulo={`Texto do nível ${ROTULO_NIVEL[nivel]}`}
         placeholder="Escreva a versão deste nível…"
         value={rascunho.textos[nivel]}
         onChangeText={alterarTexto}
@@ -296,8 +297,8 @@ export default function AdminEditorScreen() {
       />
 
       <CaixaSecao
-        titulo="03 · FILOSOFIA NO COTIDIANO"
-        apoio="Aplicação vinculada a este conteúdo • Um registro, dois pontos de acesso.">
+        titulo="FILOSOFIA NO COTIDIANO"
+        apoio="Aplicação vinculada a este conteúdo, exibida em dois caminhos sem cópia.">
         <CampoTexto
           rotulo="Título da aplicação"
           placeholder="Seu dia passa e o que importa fica para depois?"
@@ -308,7 +309,7 @@ export default function AdminEditorScreen() {
         />
 
         <CampoTexto
-          rotulo={`Aplicação prática · ${ROTULO_NIVEL[nivel]}`}
+          rotulo={`Aplicação prática do nível ${ROTULO_NIVEL[nivel]}`}
           placeholder="Que pequeno passo cabe no dia de hoje?"
           value={rascunho.aplicacao.textos[nivel]}
           onChangeText={alterarAplicacao}

@@ -20,16 +20,34 @@ import { minTouchTarget, spacing } from '@/theme';
 const CHAVE = (uid: string) => `pausa:${uid}:preferencias-app`;
 
 type Ajustes = {
-  conhecimentoDoDia: boolean;
+  conhecimentoDaSemana: boolean;
   reduzirAnimacoes: boolean;
   textoAmpliado: boolean;
 };
 
 const PADRAO: Ajustes = {
-  conhecimentoDoDia: true,
+  conhecimentoDaSemana: true,
   reduzirAnimacoes: false,
   textoAmpliado: false,
 };
+
+/**
+ * Lê os ajustes gravados, herdando o nome antigo do primeiro interruptor.
+ *
+ * O campo se chamava `conhecimentoDoDia` até 16/09, quando o destaque virou
+ * semanal (`506:1063`). Sem esta herança, quem tivesse desligado a opção veria
+ * ela ligada de novo na próxima abertura, sem nada explicando por quê — e a
+ * mesclagem com o padrão esconderia o problema em vez de acusá-lo.
+ */
+function ler(salvo: string): Ajustes {
+  const bruto = JSON.parse(salvo) as Partial<Ajustes> & { conhecimentoDoDia?: boolean };
+
+  return {
+    ...PADRAO,
+    ...bruto,
+    conhecimentoDaSemana: bruto.conhecimentoDaSemana ?? bruto.conhecimentoDoDia ?? PADRAO.conhecimentoDaSemana,
+  };
+}
 
 export default function PreferenciasScreen() {
   const router = useRouter();
@@ -47,7 +65,7 @@ export default function PreferenciasScreen() {
     AsyncStorage.getItem(CHAVE(uid))
       .then((salvo) => {
         if (!vivo || !salvo) return;
-        setAjustes({ ...PADRAO, ...(JSON.parse(salvo) as Partial<Ajustes>) });
+        setAjustes(ler(salvo));
       })
       .catch(() => {
         // Sem leitura, valem os padrões — nada se perde.
@@ -86,9 +104,9 @@ export default function PreferenciasScreen() {
 
         <Secao titulo="ROTINA">
           <Ajuste
-            titulo="Conhecimento do dia"
-            ligado={ajustes.conhecimentoDoDia}
-            aoAlternar={() => alternar('conhecimentoDoDia')}
+            titulo="Conhecimento da semana"
+            ligado={ajustes.conhecimentoDaSemana}
+            aoAlternar={() => alternar('conhecimentoDaSemana')}
           />
         </Secao>
 
