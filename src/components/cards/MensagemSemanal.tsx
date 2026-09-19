@@ -1,14 +1,20 @@
 import { Image } from 'expo-image';
 import { StyleSheet, View, type ViewProps } from 'react-native';
 
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useTheme } from '@/hooks/use-theme';
 import { retratoDoAcervo } from '@/lib/retratos';
 import { radius, spacing } from '@/theme';
 
 const ALTURA = 210;
-const RETRATO_LARGURA = 146;
-const RETRATO_ALTURA = 105;
+/**
+ * O `327:502` desenha 146×105, pensado para o retrato do Marco Aurélio. Os
+ * retratos do acervo são quase verticais (o do Sêneca é 1182×1331), e numa
+ * área larga e baixa o `contain` os encolhia a ~93px de largura. A altura de
+ * 152 é a mesma do retrato no Explorar (`431:305`).
+ */
+const RETRATO_LARGURA = 150;
+const RETRATO_ALTURA = 152;
 
 export type ConhecimentoDaSemanaProps = ViewProps & {
   /** `weeklyCardPhrase`: frase editorial de 10–80 caracteres, **sem aspas**. */
@@ -110,6 +116,7 @@ const styles = StyleSheet.create({
   },
   frase: {
     // Deixa a ilustração respirar: a frase não passa por cima do retrato.
-    maxWidth: '62%',
+    // 55% ≈ os 176px da frase no `327:504`, agora que o retrato é mais alto.
+    maxWidth: '55%',
   },
 });

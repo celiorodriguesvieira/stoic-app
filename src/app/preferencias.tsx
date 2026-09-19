@@ -1,16 +1,23 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 
-import { Screen } from '@/components/ui/screen';
-import { Text } from '@/components/ui/text';
+import { Screen } from '@/components/ui/Screen';
+import { Text } from '@/components/ui/Text';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth-context';
+import { rotulosDosInteresses } from '@/lib/interesses';
 import { minTouchTarget, spacing } from '@/theme';
 
 /**
- * Preferências de rotina e acessibilidade (`506:1063`).
+ * Preferências de acessibilidade e conteúdo (`506:1063`).
+ *
+ * A seção ROTINA, com o interruptor "Conhecimento da semana", saiu em
+ * 18/09 por decisão do autor: o destaque semanal é o centro da Home, e
+ * desligá-lo não faz sentido. O Figma ainda o desenha e precisa ser
+ * atualizado.
  *
  * Ficam **no aparelho**: são ajustes de como este aparelho se comporta, não
  * dados da conta. O rodapé promete só o que acontece — "salvas
@@ -20,40 +27,37 @@ import { minTouchTarget, spacing } from '@/theme';
 const CHAVE = (uid: string) => `pausa:${uid}:preferencias-app`;
 
 type Ajustes = {
-  conhecimentoDaSemana: boolean;
   reduzirAnimacoes: boolean;
   textoAmpliado: boolean;
 };
 
 const PADRAO: Ajustes = {
-  conhecimentoDaSemana: true,
   reduzirAnimacoes: false,
   textoAmpliado: false,
 };
 
 /**
- * Lê os ajustes gravados, herdando o nome antigo do primeiro interruptor.
+ * Lê os ajustes gravados, campo a campo.
  *
- * O campo se chamava `conhecimentoDoDia` até 16/09, quando o destaque virou
- * semanal (`506:1063`). Sem esta herança, quem tivesse desligado a opção veria
- * ela ligada de novo na próxima abertura, sem nada explicando por quê — e a
- * mesclagem com o padrão esconderia o problema em vez de acusá-lo.
+ * Campo a campo, e não espalhando o que veio, porque aparelhos antigos ainda
+ * guardam `conhecimentoDaSemana` (e, antes de 16/09, `conhecimentoDoDia`):
+ * a chave fica no armazenamento, mas não volta a entrar no estado.
  */
 function ler(salvo: string): Ajustes {
-  const bruto = JSON.parse(salvo) as Partial<Ajustes> & { conhecimentoDoDia?: boolean };
+  const bruto = JSON.parse(salvo) as Partial<Ajustes>;
 
   return {
-    ...PADRAO,
-    ...bruto,
-    conhecimentoDaSemana: bruto.conhecimentoDaSemana ?? bruto.conhecimentoDoDia ?? PADRAO.conhecimentoDaSemana,
+    reduzirAnimacoes: bruto.reduzirAnimacoes ?? PADRAO.reduzirAnimacoes,
+    textoAmpliado: bruto.textoAmpliado ?? PADRAO.textoAmpliado,
   };
 }
 
 export default function PreferenciasScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, perfil } = useAuth();
 
   const uid = user?.uid ?? null;
+  const interesses = rotulosDosInteresses(perfil?.preferencias?.interesses ?? []);
 
   const [ajustes, setAjustes] = useState<Ajustes>(PADRAO);
 
@@ -94,21 +98,17 @@ export default function PreferenciasScreen() {
             accessibilityLabel="Voltar ao menu"
             onPress={() => router.back()}
             style={styles.voltar}>
-            <Text variant="headingMedium">←</Text>
+            <Image
+              source={require('@/assets/images/icones/voltar.svg')}
+              style={styles.icone}
+              contentFit="contain"
+            />
           </Pressable>
 
           <Text variant="headingLarge" accessibilityRole="header">
             PREFERÊNCIAS
           </Text>
         </View>
-
-        <Secao titulo="ROTINA">
-          <Ajuste
-            titulo="Conhecimento da semana"
-            ligado={ajustes.conhecimentoDaSemana}
-            aoAlternar={() => alternar('conhecimentoDaSemana')}
-          />
-        </Secao>
 
         <Secao titulo="ACESSIBILIDADE">
           <Ajuste
@@ -125,13 +125,15 @@ export default function PreferenciasScreen() {
 
         <Secao titulo="CONTEÚDO">
           {/*
-            O desenho traz a seta, mas não existe tela de edição de interesses.
-            A linha fica legível e sem toque: um item que parece levar a algum
-            lugar e não leva é pior do que um item quieto.
+            Só exibe o que foi escolhido no onboarding — decisão do autor em
+            18/09. O desenho traz uma seta, mas não existe tela de edição, e
+            uma seta que não leva a lugar nenhum promete o que não entrega.
           */}
-          <View style={styles.linha}>
-            <Text style={styles.linhaTexto}>Temas de interesse</Text>
-            <Text color="textSecondary">›</Text>
+          <View style={styles.interesses}>
+            <Text>Temas de interesse</Text>
+            <Text variant="bodySmall" color="textSecondary">
+              {interesses.length > 0 ? interesses.join(' · ') : 'Nenhum tema escolhido.'}
+            </Text>
           </View>
         </Secao>
 
@@ -146,7 +148,7 @@ export default function PreferenciasScreen() {
 function Secao({ titulo, children }: { titulo: string; children: ReactNode }) {
   return (
     <View style={styles.secao}>
-      <Text variant="supportSemibold" color="textAccent">
+      <Text variant="cardLabel" color="textAccent">
         {titulo}
       </Text>
       {children}
@@ -174,6 +176,8 @@ function Ajuste({
         onValueChange={aoAlternar}
         accessibilityLabel={titulo}
         trackColor={{ true: colors.gold, false: colors.border }}
+        thumbColor={colors.surface}
+        ios_backgroundColor={colors.border}
       />
     </View>
   );
@@ -189,16 +193,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
+    minHeight: 80,
   },
   voltar: {
-    width: minTouchTarget,
-    height: minTouchTarget,
+    width: Math.max(48, minTouchTarget),
+    height: Math.max(48, minTouchTarget),
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: -spacing.md,
+  },
+  icone: {
+    width: 24,
+    height: 24,
   },
   secao: {
-    gap: spacing.lg,
+    gap: spacing.sm,
   },
   linha: {
     flexDirection: 'row',
@@ -209,7 +217,12 @@ const styles = StyleSheet.create({
   linhaTexto: {
     flex: 1,
   },
+  interesses: {
+    minHeight: 56,
+    justifyContent: 'center',
+    gap: spacing.xs,
+  },
   rodape: {
-    alignSelf: 'center',
+    textAlign: 'center',
   },
 });

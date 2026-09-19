@@ -2,12 +2,12 @@ import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { CampoTexto } from '@/components/admin/campos';
-import { Aviso, Carregando, ErroRecuperavel, Vazio } from '@/components/admin/estados';
-import { EtiquetaAdmin, NavegacaoAdmin } from '@/components/admin/navegacao';
-import { CaixaSecao, Linha, PaginaAdmin } from '@/components/admin/pagina';
-import { Button } from '@/components/ui/button';
-import { Text } from '@/components/ui/text';
+import { CampoTexto } from '@/components/admin/Campos';
+import { Aviso, Carregando, ErroRecuperavel, Vazio } from '@/components/admin/Estados';
+import { EtiquetaAdmin, NavegacaoAdmin } from '@/components/admin/Navegacao';
+import { CaixaSecao, Linha, PaginaAdmin } from '@/components/admin/Pagina';
+import { Button } from '@/components/ui/Button';
+import { Text } from '@/components/ui/Text';
 import { nomesDosTemas } from '@/lib/admin/acervo';
 import {
   arquivarConteudo,
@@ -113,6 +113,16 @@ export default function AdminConteudosScreen() {
           type="secondary"
           size="medium"
           onPress={() => router.push('/admin/conteudo/novo')}
+          style={styles.novo}
+        />
+
+        {/* `672:1245`. Abre o vídeo, que é o primeiro dos dois formulários; o
+            próprio formulário troca para livro. */}
+        <Button
+          label="NOVO RECURSO / BIBLIOTECA"
+          type="secondary"
+          size="medium"
+          onPress={() => router.push('/admin/biblioteca/novo?tipo=video')}
           style={styles.novo}
         />
       </Linha>

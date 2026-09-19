@@ -1,17 +1,18 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { CampoSelecao, CampoTexto } from '@/components/admin/campos';
-import { Aviso, Carregando, ErroRecuperavel } from '@/components/admin/estados';
-import { BotaoVoltar } from '@/components/admin/navegacao';
-import { CaixaSecao, Linha, PaginaAdmin } from '@/components/admin/pagina';
-import { Button } from '@/components/ui/button';
-import { Text } from '@/components/ui/text';
+import { CampoSelecao, CampoTexto } from '@/components/admin/Campos';
+import { Aviso, Carregando, ErroRecuperavel } from '@/components/admin/Estados';
+import { BotaoVoltar } from '@/components/admin/Navegacao';
+import { CaixaSecao, Linha, PaginaAdmin } from '@/components/admin/Pagina';
+import { Button } from '@/components/ui/Button';
+import { Text } from '@/components/ui/Text';
 import { TEMAS } from '@/lib/admin/acervo';
 import {
   criarConteudo,
   ErroDeConflito,
+  observarAtividades,
   observarConteudo,
   salvarRascunho,
 } from '@/lib/admin/repositorio';
@@ -29,6 +30,8 @@ import {
   paraRascunho,
   ROTULO_MODO_FONTE,
   ROTULO_NIVEL,
+  resumoDaAtividade,
+  type Atividade,
   type DadosDaAula,
   type EtapasDaAula,
   type EtapasPorNivel,
@@ -78,8 +81,8 @@ type Gravacao =
  * formulário deixaria metade dos campos sem sentido em cada modo.
  *
  * O que o Figma desenha e aqui não existe: "Atividade relacionada (opcional)"
- * (`670:1295`) — não há coleção de atividades no código, e um seletor vazio
- * seria pior do que a ausência. Está registrado em `docs/progresso.md`.
+ * da reflexão (`670:1295`). A "Atividade da semana", obrigatória, já existe;
+ * a relacionada fica para quando o app souber o que fazer com as duas.
  */
 export default function AdminEditorDeAulaScreen() {
   const router = useRouter();
@@ -97,10 +100,38 @@ export default function AdminEditorDeAulaScreen() {
   const [gravacao, setGravacao] = useState<Gravacao>({ estado: 'ocioso' });
   const [conflito, setConflito] = useState(false);
   const [tentativa, setTentativa] = useState(0);
+  const [atividades, setAtividades] = useState<Atividade[] | null>(null);
+  const [erroDeAtividades, setErroDeAtividades] = useState<string | null>(null);
 
   const versaoCarregada = useRef(0);
   const hidratado = useRef(false);
   const [idAtual, setIdAtual] = useState(criando ? null : id);
+
+  useEffect(
+    () => observarAtividades(setAtividades, (falha) => setErroDeAtividades(falha.message)),
+    [],
+  );
+
+  /**
+   * Só as publicadas podem ser escolhidas. A já vinculada entra mesmo que
+   * tenha saído do ar, marcada, para o campo não parecer vazio e esconder
+   * o problema — a publicação da aula é que recusa.
+   */
+  const opcoesDeAtividade = useMemo(
+    () =>
+      (atividades ?? [])
+        .filter(
+          (atividade) =>
+            atividade.status === 'publicado' || atividade.id === rascunho.aula.atividadeId,
+        )
+        .map((atividade) => ({
+          id: atividade.id,
+          nome: `${atividade.titulo || 'Sem título'} • ${resumoDaAtividade(atividade)}${
+            atividade.status === 'publicado' ? '' : ' • não publicada'
+          }`,
+        })),
+    [atividades, rascunho.aula.atividadeId],
+  );
 
   useEffect(() => {
     if (!idAtual) return;
@@ -467,18 +498,16 @@ export default function AdminEditorDeAulaScreen() {
         />
 
         {/*
-          O campo é do desenho e o contrato o torna obrigatório, mas não existe
-          coleção de atividades para alimentá-lo. Fica desabilitado, com o texto
-          do próprio Figma: o estado diz o que precisa ser dito, sem explicação
-          escrita por fora. Vira obrigatório na validação quando a coleção
-          existir.
+          Uma atividade para os quatro níveis: fica em `aula`, não nas etapas.
+          Trocar aqui, em qualquer nível, troca para todos.
         */}
         <CampoSelecao
           rotulo="Atividade da semana *"
-          opcoes={[]}
-          valor=""
-          aoEscolher={() => {}}
-          vazio="Selecione uma atividade publicada"
+          opcoes={opcoesDeAtividade}
+          valor={rascunho.aula.atividadeId}
+          aoEscolher={(valor) => alterarAula('atividadeId', valor)}
+          vazio={atividades === null && !erroDeAtividades ? 'Carregando…' : 'Selecione uma atividade publicada'}
+          erro={erroDeAtividades ?? undefined}
         />
 
         <Text variant="supportSemibold">

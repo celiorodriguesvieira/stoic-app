@@ -16,6 +16,7 @@ import {
   where,
   writeBatch,
   type DocumentData,
+  type Transaction,
 } from 'firebase/firestore';
 
 import { db, requireDb } from '@/lib/firebase';
@@ -27,6 +28,8 @@ import {
   textoPorNivelVazio,
   type Conteudo,
   type EdicaoSemanal,
+  type RascunhoRecurso,
+  type RecursoBiblioteca,
   type Filosofo,
   type Formato,
   type RascunhoConteudo,
@@ -49,6 +52,25 @@ import {
   periodosSeSobrepoem,
   MODOS_FONTE,
   TIPOS_CONTEUDO,
+  TIPOS_RECURSO,
+  idDoVideoDoYoutube,
+  pendenciasDoRecurso,
+  type TipoRecurso,
+  atividadeVazia,
+  DEVOLUTIVAS_LIVRES,
+  MODOS_RESPOSTA,
+  pendenciasDaAtividade,
+  sequenciaCorreta,
+  TIPOS_ATIVIDADE,
+  type Atividade,
+  type DevolutivaLivre,
+  type DinamicaEscolha,
+  type DinamicaOrdenacao,
+  type ModoResposta,
+  type RascunhoAtividade,
+  type TipoAtividade,
+  type IntroducaoPorNivel,
+  type Nivel,
 } from '@/lib/admin/tipos';
 
 const CONTEUDOS = 'conteudos';
@@ -56,6 +78,8 @@ const FILOSOFOS = 'filosofos';
 const AGENDA = 'agenda';
 const USUARIOS = 'usuarios';
 const AUDITORIA = 'auditoria';
+const BIBLIOTECA = 'biblioteca';
+const ATIVIDADES = 'atividades';
 
 /** Erro previsto: alguém gravou por cima enquanto esta tela estava aberta. */
 export class ErroDeConflito extends Error {
@@ -235,6 +259,7 @@ function paraAula(valor: unknown): DadosDaAula {
     fraseDestaque: texto(bruto.fraseDestaque),
     duracaoMinutos:
       typeof bruto.duracaoMinutos === 'number' ? bruto.duracaoMinutos : base.duracaoMinutos,
+    atividadeId: texto(bruto.atividadeId),
     etapas: {
       leigo: etapas(porNivel.leigo),
       curioso: etapas(porNivel.curioso),
@@ -278,6 +303,29 @@ export function observarConteudos(
     onSnapshot(
       query(collection(banco, CONTEUDOS), orderBy('atualizadoEm', 'desc')),
       (instantaneo) => aoMudar(instantaneo.docs.map((d) => paraConteudo(d.id, d.data()))),
+      falhar,
+    ),
+  );
+}
+
+/**
+ * O que o app mostra no Explorar: só publicados, mais recentes primeiro
+ * ("Conteúdos: mais recentes", `668:204`). O filtro tem de estar na consulta —
+ * ver `observarRecursosPublicados`.
+ */
+export function observarConteudosPublicados(
+  aoMudar: (conteudos: Conteudo[]) => void,
+  aoFalhar: (erro: Error) => void,
+): () => void {
+  return assinar(aoFalhar, (banco, falhar) =>
+    onSnapshot(
+      query(collection(banco, CONTEUDOS), where('status', '==', 'publicado')),
+      (instantaneo) =>
+        aoMudar(
+          instantaneo.docs
+            .map((d) => paraConteudo(d.id, d.data()))
+            .sort((a, b) => b.atualizadoEm - a.atualizadoEm || a.id.localeCompare(b.id)),
+        ),
       falhar,
     ),
   );
@@ -379,6 +427,17 @@ export async function publicarConteudo(
     const pendencias = pendenciasParaPublicar(conteudo);
     if (pendencias.length > 0) {
       throw new ErroDeRegra(`Não dá para publicar ainda: ${pendencias.join(' ')}`);
+    }
+
+    // A aula aponta para uma atividade que o app precisa conseguir ler: se ela
+    // saiu do ar depois de escolhida, o botão "Atividade da semana" abriria o
+    // vazio. Conferido aqui, na mesma transação, e não só no seletor.
+    if (conteudo.tipo === 'aula') {
+      const atividade = await transacao.get(doc(requireDb(), ATIVIDADES, conteudo.aula.atividadeId));
+
+      if (!atividade.exists() || texto(atividade.data().status) !== 'publicado') {
+        throw new ErroDeRegra('A atividade da semana escolhida não está publicada.');
+      }
     }
 
     transacao.update(referencia, {
@@ -665,13 +724,56 @@ export async function programarEdicao(
 
 // --- Filósofos ---------------------------------------------------------------
 
+function paraIntroducoes(valor: unknown): IntroducaoPorNivel {
+  const bruto = (valor ?? {}) as Record<string, unknown>;
+  const lida = (nivel: unknown) => {
+    const campos = (nivel ?? {}) as Record<string, unknown>;
+
+    return { titulo: texto(campos.titulo), texto: texto(campos.texto), fonte: texto(campos.fonte) };
+  };
+
+  return {
+    leigo: lida(bruto.leigo),
+    curioso: lida(bruto.curioso),
+    estudioso: lida(bruto.estudioso),
+    erudito: lida(bruto.erudito),
+  };
+}
+
 function paraFilosofo(id: string, dados: DocumentData): Filosofo {
   return {
     id,
     nome: texto(dados.nome),
     biografia: texto(dados.biografia),
     portraitAssetId: texto(dados.portraitAssetId) || null,
+    // Filósofo gravado antes de 18/09 não tem estes campos: chegam vazios.
+    subtitulo: texto(dados.subtitulo),
+    periodo: texto(dados.periodo),
+    introducoes: paraIntroducoes(dados.introducoes),
     atualizadoEm: millis(dados.atualizadoEm),
+  };
+}
+
+/** Os campos editáveis do filósofo, com as pontas aparadas. */
+function gravavelDoFilosofo(rascunho: RascunhoFilosofo) {
+  const aparada = (nivel: Nivel) => ({
+    titulo: rascunho.introducoes[nivel].titulo.trim(),
+    texto: rascunho.introducoes[nivel].texto.trim(),
+    fonte: rascunho.introducoes[nivel].fonte.trim(),
+  });
+
+  return {
+    nome: rascunho.nome.trim(),
+    biografia: rascunho.biografia.trim(),
+    portraitAssetId: rascunho.portraitAssetId,
+    subtitulo: rascunho.subtitulo.trim(),
+    periodo: rascunho.periodo.trim(),
+    introducoes: {
+      leigo: aparada('leigo'),
+      curioso: aparada('curioso'),
+      estudioso: aparada('estudioso'),
+      erudito: aparada('erudito'),
+    },
   };
 }
 
@@ -715,9 +817,7 @@ export async function criarFilosofo(rascunho: RascunhoFilosofo): Promise<string>
   }
 
   await setDoc(referencia, {
-    nome: rascunho.nome.trim(),
-    biografia: rascunho.biografia.trim(),
-    portraitAssetId: rascunho.portraitAssetId,
+    ...gravavelDoFilosofo(rascunho),
     atualizadoEm: serverTimestamp(),
   });
 
@@ -742,9 +842,7 @@ export async function salvarFilosofo(id: string, rascunho: RascunhoFilosofo): Pr
   }
 
   await updateDoc(referencia, {
-    nome: rascunho.nome.trim(),
-    biografia: rascunho.biografia.trim(),
-    portraitAssetId: rascunho.portraitAssetId,
+    ...gravavelDoFilosofo(rascunho),
     atualizadoEm: serverTimestamp(),
   });
 }
@@ -880,5 +978,606 @@ export async function alterarPapel(
     papelNovo: novoPapel,
     resultado: 'sucesso',
     em: serverTimestamp(),
+  });
+}
+
+// --- Biblioteca --------------------------------------------------------------
+
+function paraRecurso(id: string, dados: DocumentData): RecursoBiblioteca {
+  const tipo = daLista<TipoRecurso>(dados.tipo, TIPOS_RECURSO, 'video');
+
+  return {
+    id,
+    tipo,
+    titulo: texto(dados.titulo),
+    criador: texto(dados.criador),
+    url: texto(dados.url),
+    videoId: texto(dados.videoId) || null,
+    edicao: texto(dados.edicao),
+    // Afiliado só existe em livro; um `true` perdido num vídeo não vale.
+    afiliado: tipo === 'livro' && dados.afiliado === true,
+    recomendacao: texto(dados.recomendacao),
+    status: (texto(dados.status) || 'rascunho') as StatusConteudo,
+    atualizadoEm: millis(dados.atualizadoEm),
+    versao: typeof dados.versao === 'number' ? dados.versao : 1,
+  };
+}
+
+/**
+ * O que se grava a partir do formulário: espaços das pontas removidos
+ * ("normalizar espaços", `668:121`), campos de livro zerados em vídeo e o
+ * `videoId` derivado do link — o app nunca precisa reinterpretar a URL.
+ */
+function gravavelDoRecurso(rascunho: RascunhoRecurso) {
+  const livro = rascunho.tipo === 'livro';
+  const url = rascunho.url.trim();
+
+  return {
+    tipo: rascunho.tipo,
+    titulo: rascunho.titulo.trim(),
+    criador: rascunho.criador.trim(),
+    url,
+    videoId: livro ? null : idDoVideoDoYoutube(url),
+    edicao: livro ? rascunho.edicao.trim() : '',
+    afiliado: livro && rascunho.afiliado,
+    recomendacao: rascunho.recomendacao.trim(),
+  };
+}
+
+/** Lista a Biblioteca em tempo real, mais recente primeiro. */
+export function observarRecursos(
+  aoMudar: (recursos: RecursoBiblioteca[]) => void,
+  aoFalhar: (erro: Error) => void,
+): () => void {
+  return assinar(aoFalhar, (banco, falhar) =>
+    onSnapshot(
+      query(collection(banco, BIBLIOTECA), orderBy('atualizadoEm', 'desc')),
+      (instantaneo) => aoMudar(instantaneo.docs.map((d) => paraRecurso(d.id, d.data()))),
+      falhar,
+    ),
+  );
+}
+
+/**
+ * O que o app mostra: só publicados.
+ *
+ * O filtro tem de estar na consulta — as regras não filtram resultados, e uma
+ * consulta que pudesse devolver um rascunho seria recusada inteira para quem
+ * não é da redação. A ordem é feita aqui: `where` num campo e `orderBy` em
+ * outro exigiriam índice composto, e a Biblioteca é pequena.
+ */
+export function observarRecursosPublicados(
+  aoMudar: (recursos: RecursoBiblioteca[]) => void,
+  aoFalhar: (erro: Error) => void,
+): () => void {
+  return assinar(aoFalhar, (banco, falhar) =>
+    onSnapshot(
+      query(collection(banco, BIBLIOTECA), where('status', '==', 'publicado')),
+      (instantaneo) =>
+        aoMudar(
+          instantaneo.docs
+            .map((d) => paraRecurso(d.id, d.data()))
+            .sort((a, b) => b.atualizadoEm - a.atualizadoEm || a.id.localeCompare(b.id)),
+        ),
+      falhar,
+    ),
+  );
+}
+
+export function observarRecurso(
+  id: string,
+  aoMudar: (recurso: RecursoBiblioteca | null) => void,
+  aoFalhar: (erro: Error) => void,
+): () => void {
+  return assinar(aoFalhar, (banco, falhar) =>
+    onSnapshot(
+      doc(banco, BIBLIOTECA, id),
+      (instantaneo) =>
+        aoMudar(instantaneo.exists() ? paraRecurso(instantaneo.id, instantaneo.data()) : null),
+      falhar,
+    ),
+  );
+}
+
+/** Cria um recurso, sempre como rascunho — "salvar rascunho não publica". */
+export async function criarRecurso(rascunho: RascunhoRecurso, autorUid: string): Promise<string> {
+  const referencia = await addDoc(collection(requireDb(), BIBLIOTECA), {
+    ...gravavelDoRecurso(rascunho),
+    status: 'rascunho' satisfies StatusConteudo,
+    versao: 1,
+    criadoPor: autorUid,
+    criadoEm: serverTimestamp(),
+    atualizadoEm: serverTimestamp(),
+  });
+
+  return referencia.id;
+}
+
+/**
+ * Lê o recurso dentro da transação e confere a versão — o miolo comum de
+ * salvar, publicar, arquivar e restaurar.
+ */
+async function recursoNaVersao(
+  transacao: Transaction,
+  id: string,
+  versaoEsperada: number,
+) {
+  const referencia = doc(requireDb(), BIBLIOTECA, id);
+  const atual = await transacao.get(referencia);
+
+  if (!atual.exists()) {
+    throw new ErroDeRegra('Este recurso não existe mais.');
+  }
+
+  const recurso = paraRecurso(atual.id, atual.data());
+
+  if (recurso.versao !== versaoEsperada) {
+    throw new ErroDeConflito(
+      'Este recurso mudou em outra aba desde que você abriu. Recarregue para não perder o que a outra pessoa escreveu.',
+    );
+  }
+
+  return { referencia, recurso, dados: atual.data() };
+}
+
+/**
+ * Grava o rascunho. Um recurso publicado continua publicado: a correção vai
+ * direto para o app, como no conteúdo — o painel ainda não separa revisão em
+ * rascunho da versão publicada (`668:114`).
+ */
+export async function salvarRecurso(
+  id: string,
+  rascunho: RascunhoRecurso,
+  versaoEsperada: number,
+  autorUid: string,
+): Promise<number> {
+  return runTransaction(requireDb(), async (transacao) => {
+    const { referencia, recurso } = await recursoNaVersao(transacao, id, versaoEsperada);
+
+    // Publicado não pode ficar inválido por uma edição: o app leria um link
+    // quebrado. Rascunho pode ficar incompleto à vontade.
+    if (recurso.status === 'publicado') {
+      const pendencias = pendenciasDoRecurso(rascunho);
+      if (pendencias.length > 0) {
+        throw new ErroDeRegra(`Este recurso está publicado. Corrija antes de salvar: ${pendencias.join(' ')}`);
+      }
+    }
+
+    const proxima = recurso.versao + 1;
+
+    transacao.update(referencia, {
+      ...gravavelDoRecurso(rascunho),
+      versao: proxima,
+      atualizadoPor: autorUid,
+      atualizadoEm: serverTimestamp(),
+    });
+
+    return proxima;
+  });
+}
+
+/** Publica, revalidando dentro da transação — a tela não é a garantia. */
+export async function publicarRecurso(
+  id: string,
+  versaoEsperada: number,
+  autorUid: string,
+): Promise<void> {
+  await runTransaction(requireDb(), async (transacao) => {
+    const { referencia, recurso } = await recursoNaVersao(transacao, id, versaoEsperada);
+
+    const pendencias = pendenciasDoRecurso(recurso);
+    if (pendencias.length > 0) {
+      throw new ErroDeRegra(`Não dá para publicar ainda: ${pendencias.join(' ')}`);
+    }
+
+    transacao.update(referencia, {
+      status: 'publicado' satisfies StatusConteudo,
+      statusAnterior: null,
+      versao: recurso.versao + 1,
+      publicadoPor: autorUid,
+      publicadoEm: serverTimestamp(),
+      atualizadoEm: serverTimestamp(),
+    });
+  });
+}
+
+/**
+ * Arquiva — "arquivar remove das listas" (`668:156`). Sem checagem de agenda:
+ * a seleção semanal da Biblioteca saiu do contrato, então nada aponta para um
+ * recurso além do próprio catálogo.
+ */
+export async function arquivarRecurso(
+  id: string,
+  versaoEsperada: number,
+  autorUid: string,
+): Promise<void> {
+  await runTransaction(requireDb(), async (transacao) => {
+    const { referencia, recurso } = await recursoNaVersao(transacao, id, versaoEsperada);
+
+    if (recurso.status === 'arquivado') {
+      throw new ErroDeRegra('Este recurso já está arquivado.');
+    }
+
+    transacao.update(referencia, {
+      status: 'arquivado' satisfies StatusConteudo,
+      statusAnterior: recurso.status,
+      versao: recurso.versao + 1,
+      arquivadoPor: autorUid,
+      arquivadoEm: serverTimestamp(),
+      atualizadoEm: serverTimestamp(),
+    });
+  });
+}
+
+/** Devolve ao status de antes do arquivamento, como `restaurarConteudo`. */
+export async function restaurarRecurso(
+  id: string,
+  versaoEsperada: number,
+  autorUid: string,
+): Promise<StatusConteudo> {
+  return runTransaction(requireDb(), async (transacao) => {
+    const { referencia, recurso, dados } = await recursoNaVersao(transacao, id, versaoEsperada);
+
+    if (recurso.status !== 'arquivado') {
+      throw new ErroDeRegra('Este recurso não está arquivado.');
+    }
+
+    const destino: StatusConteudo =
+      texto(dados.statusAnterior) === 'publicado' ? 'publicado' : 'rascunho';
+
+    transacao.update(referencia, {
+      status: destino,
+      statusAnterior: null,
+      versao: recurso.versao + 1,
+      restauradoPor: autorUid,
+      restauradoEm: serverTimestamp(),
+      atualizadoEm: serverTimestamp(),
+    });
+
+    return destino;
+  });
+}
+
+// --- Atividades --------------------------------------------------------------
+
+function objetos(valor: unknown): Record<string, unknown>[] {
+  return Array.isArray(valor)
+    ? valor.filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+    : [];
+}
+
+function paraOrdenacao(valor: unknown): DinamicaOrdenacao {
+  const bruto = (valor ?? {}) as Record<string, unknown>;
+  const blocos = objetos(bruto.blocos)
+    .map((item) => ({ id: texto(item.id), texto: texto(item.texto), distrator: item.distrator === true }))
+    // Bloco sem id não tem como entrar numa tentativa: ela guarda ids.
+    .filter((bloco) => bloco.id);
+
+  return {
+    fraseBase: texto(bruto.fraseBase),
+    blocos: blocos.length > 0 ? blocos : atividadeVazia('ordenacao').ordenacao.blocos,
+    mensagemTentativa: texto(bruto.mensagemTentativa),
+    explicacao: texto(bruto.explicacao),
+  };
+}
+
+function paraEscolha(valor: unknown, tipo: TipoAtividade): DinamicaEscolha {
+  const bruto = (valor ?? {}) as Record<string, unknown>;
+  const base = atividadeVazia(tipo).escolha;
+  const alternativas = objetos(bruto.alternativas)
+    .map((item) => ({ id: texto(item.id), texto: texto(item.texto), devolutiva: texto(item.devolutiva) }))
+    .filter((alternativa) => alternativa.id);
+  const mensagem = bruto.mensagem && typeof bruto.mensagem === 'object'
+    ? (bruto.mensagem as Record<string, unknown>)
+    : null;
+
+  return {
+    situacao: texto(bruto.situacao),
+    pergunta: texto(bruto.pergunta),
+    alternativas: alternativas.length > 0 ? alternativas : base.alternativas,
+    modo: daLista<ModoResposta>(bruto.modo, MODOS_RESPOSTA, base.modo),
+    respostaId: texto(bruto.respostaId),
+    devolutivaLivre: daLista<DevolutivaLivre>(bruto.devolutivaLivre, DEVOLUTIVAS_LIVRES, base.devolutivaLivre),
+    devolutivaComum: texto(bruto.devolutivaComum),
+    mensagem: mensagem
+      ? {
+          remetente: texto(mensagem.remetente),
+          identificador: texto(mensagem.identificador),
+          corpo: texto(mensagem.corpo),
+          endereco: texto(mensagem.endereco),
+          observacao: texto(mensagem.observacao),
+        }
+      : null,
+  };
+}
+
+function paraAtividade(id: string, dados: DocumentData): Atividade {
+  const tipo = daLista<TipoAtividade>(dados.tipo, TIPOS_ATIVIDADE, 'reflexao');
+  const conclusao = (dados.conclusao ?? {}) as Record<string, unknown>;
+
+  return {
+    id,
+    tipo,
+    titulo: texto(dados.titulo),
+    duracaoMinutos: typeof dados.duracaoMinutos === 'number' ? dados.duracaoMinutos : 0,
+    instrucao: texto(dados.instrucao),
+    filosofoId: texto(dados.filosofoId),
+    temaIds: Array.isArray(dados.temaIds)
+      ? dados.temaIds.filter((t): t is string => typeof t === 'string')
+      : [],
+    conteudoId: texto(dados.conteudoId),
+    ordenacao: paraOrdenacao(dados.ordenacao),
+    escolha: paraEscolha(dados.escolha, tipo),
+    conclusao: { titulo: texto(conclusao.titulo), texto: texto(conclusao.texto) },
+    status: (texto(dados.status) || 'rascunho') as StatusConteudo,
+    atualizadoEm: millis(dados.atualizadoEm),
+    versao: typeof dados.versao === 'number' ? dados.versao : 1,
+  };
+}
+
+/**
+ * O que se grava a partir do formulário: pontas aparadas, mensagem simulada
+ * só em situação e a sequência correta derivada da ordem dos blocos — o app
+ * confere a tentativa contra `sequencia` sem reinterpretar a lista.
+ */
+function gravavelDaAtividade(rascunho: RascunhoAtividade) {
+  const { ordenacao, escolha } = rascunho;
+  const mensagem = rascunho.tipo === 'situacao' ? escolha.mensagem : null;
+
+  return {
+    tipo: rascunho.tipo,
+    titulo: rascunho.titulo.trim(),
+    duracaoMinutos: rascunho.duracaoMinutos,
+    instrucao: rascunho.instrucao.trim(),
+    filosofoId: rascunho.filosofoId,
+    temaIds: rascunho.temaIds,
+    conteudoId: rascunho.conteudoId,
+    ordenacao: {
+      fraseBase: ordenacao.fraseBase.trim(),
+      blocos: ordenacao.blocos.map((bloco) => ({ ...bloco, texto: bloco.texto.trim() })),
+      sequencia: sequenciaCorreta(ordenacao),
+      mensagemTentativa: ordenacao.mensagemTentativa.trim(),
+      explicacao: ordenacao.explicacao.trim(),
+    },
+    escolha: {
+      situacao: escolha.situacao.trim(),
+      pergunta: escolha.pergunta.trim(),
+      alternativas: escolha.alternativas.map((alternativa) => ({
+        id: alternativa.id,
+        texto: alternativa.texto.trim(),
+        devolutiva: alternativa.devolutiva.trim(),
+      })),
+      modo: escolha.modo,
+      // Resposta indicada só existe no modo orientado: no livre não há
+      // gabarito, e um id perdido ali seria um "certo" escondido.
+      respostaId: escolha.modo === 'orientado' ? escolha.respostaId : '',
+      devolutivaLivre: escolha.devolutivaLivre,
+      devolutivaComum: escolha.devolutivaComum.trim(),
+      mensagem: mensagem
+        ? {
+            remetente: mensagem.remetente.trim(),
+            identificador: mensagem.identificador.trim(),
+            corpo: mensagem.corpo.trim(),
+            endereco: mensagem.endereco.trim(),
+            observacao: mensagem.observacao.trim(),
+          }
+        : null,
+    },
+    conclusao: {
+      titulo: rascunho.conclusao.titulo.trim(),
+      texto: rascunho.conclusao.texto.trim(),
+    },
+  };
+}
+
+/** Lista as atividades em tempo real, mais recente primeiro. */
+export function observarAtividades(
+  aoMudar: (atividades: Atividade[]) => void,
+  aoFalhar: (erro: Error) => void,
+): () => void {
+  return assinar(aoFalhar, (banco, falhar) =>
+    onSnapshot(
+      query(collection(banco, ATIVIDADES), orderBy('atualizadoEm', 'desc')),
+      (instantaneo) => aoMudar(instantaneo.docs.map((d) => paraAtividade(d.id, d.data()))),
+      falhar,
+    ),
+  );
+}
+
+/**
+ * O que o app mostra: só publicadas. O filtro tem de estar na consulta — ver
+ * `observarRecursosPublicados` — e a ordem é feita aqui pelo mesmo motivo.
+ */
+export function observarAtividadesPublicadas(
+  aoMudar: (atividades: Atividade[]) => void,
+  aoFalhar: (erro: Error) => void,
+): () => void {
+  return assinar(aoFalhar, (banco, falhar) =>
+    onSnapshot(
+      query(collection(banco, ATIVIDADES), where('status', '==', 'publicado')),
+      (instantaneo) =>
+        aoMudar(
+          instantaneo.docs
+            .map((d) => paraAtividade(d.id, d.data()))
+            .sort((a, b) => b.atualizadoEm - a.atualizadoEm || a.id.localeCompare(b.id)),
+        ),
+      falhar,
+    ),
+  );
+}
+
+export function observarAtividade(
+  id: string,
+  aoMudar: (atividade: Atividade | null) => void,
+  aoFalhar: (erro: Error) => void,
+): () => void {
+  return assinar(aoFalhar, (banco, falhar) =>
+    onSnapshot(
+      doc(banco, ATIVIDADES, id),
+      (instantaneo) =>
+        aoMudar(instantaneo.exists() ? paraAtividade(instantaneo.id, instantaneo.data()) : null),
+      falhar,
+    ),
+  );
+}
+
+/** Cria uma atividade, sempre como rascunho. */
+export async function criarAtividade(rascunho: RascunhoAtividade, autorUid: string): Promise<string> {
+  const referencia = await addDoc(collection(requireDb(), ATIVIDADES), {
+    ...gravavelDaAtividade(rascunho),
+    status: 'rascunho' satisfies StatusConteudo,
+    versao: 1,
+    criadoPor: autorUid,
+    criadoEm: serverTimestamp(),
+    atualizadoEm: serverTimestamp(),
+  });
+
+  return referencia.id;
+}
+
+/** Lê a atividade dentro da transação e confere a versão, como `recursoNaVersao`. */
+async function atividadeNaVersao(transacao: Transaction, id: string, versaoEsperada: number) {
+  const referencia = doc(requireDb(), ATIVIDADES, id);
+  const atual = await transacao.get(referencia);
+
+  if (!atual.exists()) {
+    throw new ErroDeRegra('Esta atividade não existe mais.');
+  }
+
+  const atividade = paraAtividade(atual.id, atual.data());
+
+  if (atividade.versao !== versaoEsperada) {
+    throw new ErroDeConflito(
+      'Esta atividade mudou em outra aba desde que você abriu. Recarregue para não perder o que a outra pessoa escreveu.',
+    );
+  }
+
+  return { referencia, atividade, dados: atual.data() };
+}
+
+/** Grava o rascunho. Publicada continua publicada, mas não pode ficar inválida. */
+export async function salvarAtividade(
+  id: string,
+  rascunho: RascunhoAtividade,
+  versaoEsperada: number,
+  autorUid: string,
+): Promise<number> {
+  return runTransaction(requireDb(), async (transacao) => {
+    const { referencia, atividade } = await atividadeNaVersao(transacao, id, versaoEsperada);
+
+    if (atividade.status === 'publicado') {
+      const pendencias = pendenciasDaAtividade(rascunho);
+      if (pendencias.length > 0) {
+        throw new ErroDeRegra(`Esta atividade está publicada. Corrija antes de salvar: ${pendencias.join(' ')}`);
+      }
+    }
+
+    const proxima = atividade.versao + 1;
+
+    transacao.update(referencia, {
+      ...gravavelDaAtividade(rascunho),
+      versao: proxima,
+      atualizadoPor: autorUid,
+      atualizadoEm: serverTimestamp(),
+    });
+
+    return proxima;
+  });
+}
+
+/** Publica, revalidando dentro da transação — a tela não é a garantia. */
+export async function publicarAtividade(
+  id: string,
+  versaoEsperada: number,
+  autorUid: string,
+): Promise<void> {
+  await runTransaction(requireDb(), async (transacao) => {
+    const { referencia, atividade } = await atividadeNaVersao(transacao, id, versaoEsperada);
+
+    const pendencias = pendenciasDaAtividade(atividade);
+    if (pendencias.length > 0) {
+      throw new ErroDeRegra(`Não dá para publicar ainda: ${pendencias.join(' ')}`);
+    }
+
+    transacao.update(referencia, {
+      status: 'publicado' satisfies StatusConteudo,
+      statusAnterior: null,
+      versao: atividade.versao + 1,
+      publicadoPor: autorUid,
+      publicadoEm: serverTimestamp(),
+      atualizadoEm: serverTimestamp(),
+    });
+  });
+}
+
+/**
+ * Arquiva — "arquivar retira do catálogo e preserva o histórico" (`643:1270`).
+ *
+ * Recusa enquanto uma aula publicada tiver esta atividade como "Atividade da
+ * semana": arquivar tiraria do app o exercício que a aula promete. A consulta
+ * roda antes da transação porque transação no cliente só lê documento por id.
+ */
+export async function arquivarAtividade(
+  id: string,
+  versaoEsperada: number,
+  autorUid: string,
+): Promise<void> {
+  const vinculadas = await getDocs(
+    query(collection(requireDb(), CONTEUDOS), where('aula.atividadeId', '==', id)),
+  );
+  const aula = vinculadas.docs
+    .map((d) => paraConteudo(d.id, d.data()))
+    .find((conteudo) => conteudo.status === 'publicado');
+
+  if (aula) {
+    throw new ErroDeRegra(
+      `A aula publicada “${aula.titulo || 'sem título'}” usa esta atividade. Troque a atividade da aula antes de arquivar.`,
+    );
+  }
+
+  await runTransaction(requireDb(), async (transacao) => {
+    const { referencia, atividade } = await atividadeNaVersao(transacao, id, versaoEsperada);
+
+    if (atividade.status === 'arquivado') {
+      throw new ErroDeRegra('Esta atividade já está arquivada.');
+    }
+
+    transacao.update(referencia, {
+      status: 'arquivado' satisfies StatusConteudo,
+      statusAnterior: atividade.status,
+      versao: atividade.versao + 1,
+      arquivadoPor: autorUid,
+      arquivadoEm: serverTimestamp(),
+      atualizadoEm: serverTimestamp(),
+    });
+  });
+}
+
+/** Devolve ao status de antes do arquivamento. */
+export async function restaurarAtividade(
+  id: string,
+  versaoEsperada: number,
+  autorUid: string,
+): Promise<StatusConteudo> {
+  return runTransaction(requireDb(), async (transacao) => {
+    const { referencia, atividade, dados } = await atividadeNaVersao(transacao, id, versaoEsperada);
+
+    if (atividade.status !== 'arquivado') {
+      throw new ErroDeRegra('Esta atividade não está arquivada.');
+    }
+
+    const destino: StatusConteudo =
+      texto(dados.statusAnterior) === 'publicado' ? 'publicado' : 'rascunho';
+
+    transacao.update(referencia, {
+      status: destino,
+      statusAnterior: null,
+      versao: atividade.versao + 1,
+      restauradoPor: autorUid,
+      restauradoEm: serverTimestamp(),
+      atualizadoEm: serverTimestamp(),
+    });
+
+    return destino;
   });
 }

@@ -4,8 +4,8 @@
 ("Epicteto / Exportação alinhada / 591 × 886") e verificação aprovada. Resta
 apagar no Figma o retângulo "Correção / Artefato alfa" (`108:5`), que não é mais
 necessário.
-**Onde aparece:** splash de abertura (`src/components/splash-overlay.tsx`)
-**Componente:** `src/components/epicteto-sequence.tsx`
+**Onde aparece:** splash de abertura (`src/components/SplashOverlay.tsx`)
+**Componente:** `src/components/EpictetoSequence.tsx`
 **Nós no Figma:** `99:5` (tela), `100:3`, `103:5`, `103:6` (quadros animados)
 
 ## Sintoma

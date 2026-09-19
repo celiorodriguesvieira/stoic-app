@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { CitacaoAutoria } from '@/components/citacao-autoria';
-import { EpictetoSequence } from '@/components/epicteto-sequence';
-import { Text } from '@/components/ui/text';
+import { CitacaoAutoria } from '@/components/CitacaoAutoria';
+import { EpictetoSequence } from '@/components/EpictetoSequence';
+import { Text } from '@/components/ui/Text';
 import { useTheme } from '@/hooks/use-theme';
 import { spacing } from '@/theme';
 

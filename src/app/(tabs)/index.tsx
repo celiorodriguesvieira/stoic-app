@@ -2,10 +2,10 @@ import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { CardConhecimentoDaSemana } from '@/components/cards/mensagem-semanal';
-import { CardTemaDestaque } from '@/components/cards/tema-destaque';
-import { CabecalhoApp } from '@/components/ui/cabecalho-app';
-import { Text } from '@/components/ui/text';
+import { CardConhecimentoDaSemana } from '@/components/cards/MensagemSemanal';
+import { CardTemaDestaque } from '@/components/cards/TemaDestaque';
+import { CabecalhoApp } from '@/components/ui/CabecalhoApp';
+import { Text } from '@/components/ui/Text';
 import { useTheme } from '@/hooks/use-theme';
 import { nomeDoFilosofoEm } from '@/lib/admin/acervo';
 import { useFilosofos } from '@/lib/admin/use-filosofos';
@@ -45,15 +45,21 @@ export default function HojeScreen() {
         {carregando ? (
           <Aguardando />
         ) : ativa ? (
-          <CardConhecimentoDaSemana
-            frase={ativa.aula.aula.fraseDestaque}
-            autor={nomeDoFilosofoEm(filosofos, ativa.aula.autorId)}
-            duracaoMinutos={ativa.aula.aula.duracaoMinutos}
-            retratoId={
-              filosofos.find((filosofo) => filosofo.id === ativa.aula.autorId)?.portraitAssetId ??
-              null
-            }
-          />
+          <Pressable
+            accessibilityRole="link"
+            accessibilityLabel={`Conhecimento da semana: ${ativa.aula.aula.fraseDestaque}. Abrir`}
+            onPress={() => router.push(`/aula/${ativa.aula.id}`)}
+            style={({ pressed }) => pressed && styles.pressionado}>
+            <CardConhecimentoDaSemana
+              frase={ativa.aula.aula.fraseDestaque}
+              autor={nomeDoFilosofoEm(filosofos, ativa.aula.autorId)}
+              duracaoMinutos={ativa.aula.aula.duracaoMinutos}
+              retratoId={
+                filosofos.find((filosofo) => filosofo.id === ativa.aula.autorId)?.portraitAssetId ??
+                null
+              }
+            />
+          </Pressable>
         ) : (
           <SemEdicao aoExplorar={() => router.push('/explorar')} />
         )}
@@ -129,6 +135,9 @@ function SemEdicao({ aoExplorar }: { aoExplorar: () => void }) {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
+  },
+  pressionado: {
+    opacity: 0.85,
   },
   conteudo: {
     paddingHorizontal: spacing['2xl'],

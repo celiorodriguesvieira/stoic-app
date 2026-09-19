@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { MenuSeuEspaco } from '@/components/ui/menu-seu-espaco';
-import { Text } from '@/components/ui/text';
+import { MenuSeuEspaco } from '@/components/ui/MenuSeuEspaco';
+import { Text } from '@/components/ui/Text';
 import { useTheme } from '@/hooks/use-theme';
 import { minTouchTarget, spacing } from '@/theme';
 

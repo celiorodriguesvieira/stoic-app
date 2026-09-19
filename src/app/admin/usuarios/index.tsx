@@ -2,12 +2,12 @@ import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { CampoTexto } from '@/components/admin/campos';
-import { Carregando, ErroRecuperavel, Vazio } from '@/components/admin/estados';
-import { EtiquetaAdmin, NavegacaoAdmin } from '@/components/admin/navegacao';
-import { CaixaSecao, PaginaAdmin } from '@/components/admin/pagina';
-import { Button } from '@/components/ui/button';
-import { Text } from '@/components/ui/text';
+import { CampoTexto } from '@/components/admin/Campos';
+import { Carregando, ErroRecuperavel, Vazio } from '@/components/admin/Estados';
+import { EtiquetaAdmin, NavegacaoAdmin } from '@/components/admin/Navegacao';
+import { CaixaSecao, PaginaAdmin } from '@/components/admin/Pagina';
+import { Button } from '@/components/ui/Button';
+import { Text } from '@/components/ui/Text';
 import { observarUsuarios } from '@/lib/admin/repositorio';
 import { useAuth } from '@/lib/auth-context';
 import { ROTULO_PAPEL, type PerfilUsuario } from '@/lib/perfil';

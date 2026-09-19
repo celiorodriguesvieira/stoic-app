@@ -2,13 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import { BackHandler, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { CardRetratoFilosofo } from '@/components/cards/retrato-filosofo';
-import { OpcaoInteresse, OpcaoNivel } from '@/components/onboarding/opcoes';
-import { ProgressoOnboarding } from '@/components/onboarding/progresso';
-import { Button } from '@/components/ui/button';
-import { Text } from '@/components/ui/text';
-import { Voltar } from '@/components/ui/voltar';
+import { CardRetratoFilosofo } from '@/components/cards/RetratoFilosofo';
+import { OpcaoInteresse, OpcaoNivel } from '@/components/onboarding/Opcoes';
+import { ProgressoOnboarding } from '@/components/onboarding/Progresso';
+import { Button } from '@/components/ui/Button';
+import { Text } from '@/components/ui/Text';
+import { Voltar } from '@/components/ui/Voltar';
 import { useTheme } from '@/hooks/use-theme';
+import { INTERESSES } from '@/lib/interesses';
 import { useOnboarding, type ParcialOnboarding } from '@/lib/onboarding-context';
 import { spacing } from '@/theme';
 
@@ -17,15 +18,6 @@ const NIVEIS = [
   { id: 'curioso', titulo: 'Curioso', descricao: 'Assunto interessante para aprender' },
   { id: 'estudioso', titulo: 'Estudioso', descricao: 'Não possuo conhecimento prévio' },
   { id: 'erudito', titulo: 'Erudito', descricao: 'Proficiência em filosofia' },
-] as const;
-
-const INTERESSES = [
-  { id: 'autoconhecimento', rotulo: 'Autoconhecimento' },
-  { id: 'etica-convivencia', rotulo: 'Ética e convivência' },
-  { id: 'pensamento-critico', rotulo: 'Pensamento crítico' },
-  { id: 'felicidade-proposito', rotulo: 'Felicidade e propósito' },
-  { id: 'redes-sociais', rotulo: 'Redes sociais e influência' },
-  { id: 'consumo-dinheiro', rotulo: 'Consumo e dinheiro' },
 ] as const;
 
 const TOTAL_ETAPAS = 2;

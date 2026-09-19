@@ -2,11 +2,11 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { Aviso, Carregando, ErroRecuperavel } from '@/components/admin/estados';
-import { BotaoVoltar } from '@/components/admin/navegacao';
-import { CaixaSecao, Linha, PaginaAdmin } from '@/components/admin/pagina';
-import { Button } from '@/components/ui/button';
-import { Text } from '@/components/ui/text';
+import { Aviso, Carregando, ErroRecuperavel } from '@/components/admin/Estados';
+import { BotaoVoltar } from '@/components/admin/Navegacao';
+import { CaixaSecao, Linha, PaginaAdmin } from '@/components/admin/Pagina';
+import { Button } from '@/components/ui/Button';
+import { Text } from '@/components/ui/Text';
 import { mensagemDeErro, observarConteudo, publicarConteudo } from '@/lib/admin/repositorio';
 import {
   aplicacaoVinculada,

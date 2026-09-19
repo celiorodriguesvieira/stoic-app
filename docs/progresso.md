@@ -3,7 +3,7 @@
 Diário para retomar o trabalho sem depender de memória. Atualize a cada sessão:
 mova o que foi feito para "Histórico" e revise "Próximos passos".
 
-**Última atualização:** 2026-09-16 (cadastro da aula semanal)
+**Última atualização:** 2026-09-18 (Atividades no painel e no app; leitor da aula; atividade da semana)
 **Figma:** [APP — TCC](https://www.figma.com/design/4ZvYZeKHrKGtUlSEEzedEp/APP---TCC)
 
 ---
@@ -280,7 +280,7 @@ do simulador).
 
 | Tela | Arquivo | Nó no Figma |
 | --- | --- | --- |
-| Splash (Epicteto) | `src/components/splash-overlay.tsx` | `1:2`, `99:4` |
+| Splash (Epicteto) | `src/components/SplashOverlay.tsx` | `1:2`, `99:4` |
 | Cadastro | `src/app/(auth)/criar-conta.tsx` | `576:12` |
 | Entrar | `src/app/(auth)/entrar.tsx` | `612:12` |
 | Recuperar senha (2 estados) | `src/app/(auth)/recuperar-senha.tsx` | `613:14`, `613:43` |
@@ -298,19 +298,19 @@ do simulador).
 | Admin · Alterar permissão | `src/app/admin/usuarios/[uid].tsx` | `595:8` |
 | Admin · Filósofos | `src/app/admin/filosofos/index.tsx` | `643:947` |
 | Admin · Novo / Editar filósofo | `src/app/admin/filosofos/[id].tsx` | `643:1215`, `643:948` |
-| Menu "Seu espaço" | `src/components/ui/menu-seu-espaco.tsx` | `645:977`, `649:987` |
-| Cabeçalho com hambúrguer | `src/components/ui/cabecalho-app.tsx` | `649:987`, item 14 |
+| Menu "Seu espaço" | `src/components/ui/MenuSeuEspaco.tsx` | `645:977`, `649:987` |
+| Cabeçalho com hambúrguer | `src/components/ui/CabecalhoApp.tsx` | `649:987`, item 14 |
 | Seu perfil | `src/app/perfil/index.tsx` | `508:836` |
 | Seu avatar | `src/app/perfil/avatar.tsx` | `511:1045` |
 | Preferências | `src/app/preferencias.tsx` | `506:1063` |
 
 ### Componentes criados nesta fase
 
-- `src/components/ui/text-field.tsx` — campo com rótulo e erro
-- `src/components/ui/checkbox.tsx` — checkbox 16 px com ícone do Figma
-- `src/components/onboarding/opcoes.tsx` — `OpcaoNivel` e `OpcaoInteresse`
-- `src/components/onboarding/progresso.tsx` — pontinhos de progresso
-- `src/components/cards/retrato-filosofo.tsx` — card com personagem saindo do topo
+- `src/components/ui/TextField.tsx` — campo com rótulo e erro
+- `src/components/ui/Checkbox.tsx` — checkbox 16 px com ícone do Figma
+- `src/components/onboarding/Opcoes.tsx` — `OpcaoNivel` e `OpcaoInteresse`
+- `src/components/onboarding/Progresso.tsx` — pontinhos de progresso
+- `src/components/cards/RetratoFilosofo.tsx` — card com personagem saindo do topo
 - `Button` ganhou `size="medium"` (48 px) e `shape="rounded"` (raio 8)
 
 ### Painel administrativo (2026-09-13)
@@ -437,25 +437,68 @@ e nunca persiste a senha.
       (`inicio <= hoje < fim`), buscar a aula referenciada e montar o card com
       a frase de destaque, a duração e o filósofo — e, sem edição ativa,
       ocultar o destaque e oferecer Explorar, como manda o contrato
-- [ ] **A aula publicada não tem leitor no app**: as quatro etapas existem no
-      cadastro e na prévia do painel, mas ninguém as percorre (`61:6`–`61:9`).
-      É o próximo passo depois da Home
+- [x] **Leitor da aula no app** — feito em 18/09: o card da Home abre
+      `/aula/[id]` com as quatro etapas (`61:6`–`61:9`) no nível do onboarding
+      (sem nível, Leigo). A etapa 3 tem "ATIVIDADE DA SEMANA" quando a aula
+      tem atividade vinculada. Ilustrações baixadas do Figma para
+      `assets/images/ilustracoes/`. A escolha da reflexão e o compromisso não
+      são gravados — não existe onde guardar progresso
+- [x] **Aba Atividades do app** — feita em 18/09 (`66:5`): recomendada = a
+      atividade da semana da edição ativa, filtro "até N min", lista das
+      publicadas; `/atividade/[id]` com interação e conclusão, os mesmos
+      componentes da prévia do painel. Concluir **não registra tentativa**
+- [x] **Explorar no app** — feito em 18/09 (`62:5`, `363:19`, `364:35`):
+      abas Temas, Autores e Conteúdos com busca por aba; temas e autores em
+      ordem alfabética, conteúdos publicados do mais recente. Destinos nas
+      rotas do `468:985`: `/temas/[id]`, `/autores/[id]` (template único) e
+      `/conteudos/[id]` (leitura no nível do onboarding, que avisa e oferece
+      outro nível quando falta versão). Aula abre em `/aula/[id]`
+- [x] **Fluxo Explorar → Filósofo → Leitura** (`420:522`) — feito em 18/09:
+      o filósofo ganhou "Subtítulo e período de vida" e "Introdução por nível
+      *" (título, texto e fonte por nível) no cadastro (`643:948`); a página
+      `/autores/[id]` segue o `420:87` (card escuro, seletor NÍVEL DE LEITURA,
+      introdução, "Filosofia no cotidiano", "Ponto de partida") e a leitura
+      `/conteudos/[id]` segue o `420:118`, com o mesmo seletor. O nível passa
+      de uma tela para a outra por `?nivel=`. **A introdução é obrigatória
+      nos quatro níveis**: filósofo antigo só salva depois de preenchida
+- [x] **"Conhecimento da semana" saiu de Preferências** (18/09, decisão do
+      autor): desligar o destaque da Home não faz sentido. A seção ROTINA
+      sumiu junto. **Falta atualizar o Figma** (`506:1063`), que ainda o desenha
+- [ ] **Explorar: o que ficou de fora** — "Temas em destaque", "Autores em
+      destaque" e "Mais acessados" (dependem da curadoria `668:204`, que não
+      existe, e de medição); apresentação do tema (tema não tem descrição
+      enquanto viver em `acervo.ts`); player de áudio e vídeo (o conteúdo não
+      tem campo de mídia); "voltar recupera origem, filtros e rolagem"
+- [ ] **Temas no painel** (`668:205`) e **curadoria do Explorar** (`668:204`):
+      próximos passos do Explorar, nessa ordem
+- [ ] **A Programação sugere início na próxima segunda**: quem programa numa
+      sexta e não mexe no campo não vê nada na Home até segunda. É a regra
+      do contrato, mas confundiu no primeiro teste real (18/09)
 - [ ] **Campos do `668:202` que ficaram de fora**: "Atividade relacionada
-      (opcional)" — não existe coleção de atividades, e um seletor vazio seria
-      pior do que a ausência
-- [ ] **`NOVO RECURSO / BIBLIOTECA` (`672:1245`) não foi criado**: a Biblioteca
-      não tem cadastro nem coleção. O botão entra quando o `668:203` existir
+      (opcional)" da reflexão. A "Atividade da semana" já existe
+- [x] **`NOVO RECURSO / BIBLIOTECA` (`672:1245`)** — feito em 17/09: coleção
+      `biblioteca`, aba BIBLIOTECA no painel, formulários de vídeo (`668:203`)
+      e livro (`779:143`), revisão com o player do YouTube e publicação.
+      A aba Biblioteca do app (`67:5`) lista os publicados com busca e filtros,
+      e o detalhe (`67:6`, rota `/recurso/[id]`) usa o mesmo componente da
+      prévia do painel. Player incorporado nos dois: `iframe` na web, `react-native-webview` no aparelho
 - [ ] **Erro do Firestore aparece em inglês** no catálogo sem sessão ("Missing
       or insufficient permissions"). A mensagem vem crua do SDK e devia ser
       traduzida como as outras
-- [ ] **Os interruptores de Preferências só guardam a escolha.** "Conhecimento
-      do dia" não muda a Home; "Reduzir animações" e "Texto ampliado" não
+- [ ] **Os interruptores de Preferências só guardam a escolha.** "Reduzir
+      animações" e "Texto ampliado" não
       alteram a renderização. Ficam no aparelho, por conta (`pausa:{uid}:
       preferencias-app`). O desenho de 15/09 **removeu "Lembretes"**, que era o
       único item a exigir permissão de notificação
-- [ ] **"Temas de interesse" não navega**: o desenho tem a seta, mas não existe
-      tela de edição de interesses. Hoje a linha só mostra o que foi escolhido
-      no onboarding
+- [x] **"Temas de interesse" em Preferências** — 18/09: exibe os interesses
+      escolhidos no onboarding (`perfil.preferencias.interesses`), só para
+      leitura, por decisão do autor. A seta do desenho saiu: não há tela de
+      edição. A lista mudou para `src/lib/interesses.ts`
+- [ ] **Duas listas de temas**: os interesses do onboarding (iguais ao Figma
+      do Explorar: Ética e convivência, Consumo e dinheiro…) não são os
+      `TEMAS` de `acervo.ts` que classificam conteúdos. Só "Autoconhecimento"
+      coincide, então o interesse nunca casa com o tema de um conteúdo.
+      Resolver no cadastro de temas (`668:205`)
 - [ ] **Foco preso no menu** (item 06): o React Native não tem captura de foco
       nativa. Escape, X, toque fora e Voltar fecham, mas Tab ainda escapa do
       painel na web
@@ -464,9 +507,24 @@ e nunca persiste a senha.
       `epicteto` e os outros quatro no Firestore com os **mesmos ids** que os
       conteúdos já guardam em `autorId`. Sem esse passo, o seletor de filósofo
       do editor abre vazio
-- [ ] **Atividades** (`644:95`): o contrato inteiro está desenhado e nada foi
-      implementado. Três tipos num editor condicionado, prévia, versão pública
-      preservada até republicar, registro de conclusão por tentativa
+- [ ] **Atividades** (`644:95`) — **admin feito em 18/09**: coleção
+      `atividades`, aba ATIVIDADES no painel (`643:1270`), editor único com os
+      três tipos (`643:1271`, `644:104`, `644:1271`), mensagem simulada na
+      situação, revisão com interação e conclusão clicáveis (`643:1272`) e
+      publicação. **"Atividade da semana" da aula ligada em 18/09**: grava
+      `aula.atividadeId` (um para os quatro níveis), é obrigatória para
+      publicar, a publicação confere que a atividade está publicada e arquivar
+      uma atividade usada por aula publicada é recusado. Falta: o campo
+      opcional "Atividade relacionada" da reflexão (`670:1295`), a "atividade
+      recomendada" da programação, a aba Atividades do app (`66:2`, reaproveitando
+      `components/atividades/TelaAtividade.tsx`) e o registro de conclusão
+      por tentativa. A versão pública não é preservada até republicar: como no
+      conteúdo e na Biblioteca, salvar uma atividade publicada vale na hora
+- [ ] **Campos do contrato de atividade que o editor não desenha** (`668:142`):
+      "resumo" ficou de fora (nenhuma tela o mostra); "mensagem de tentativa"
+      entrou como campo, porque o contrato a torna obrigatória. "Situação /
+      pergunta" virou dois campos, porque o app mostra os dois em lugares
+      diferentes (card e pergunta acima das alternativas)
 - [x] ~~**Foto do filósofo**: depende de habilitar o Cloud Storage~~ —
       **encerrado em 16/09 por decisão do contrato** (`668:167`): "Cloud Storage
       não será ativado. Retratos e miniaturas são assets distribuídos". Virou o
@@ -534,8 +592,8 @@ e nunca persiste a senha.
       navegação administrativa própria, sem hambúrguer do app" (`654:1759`) —,
       **mas isso deixa o painel sem saída em tela de celular**. Decidir se o
       painel ganha uma saída desenhada ou se deixa de ser aberto no aparelho
-- [ ] A barra `596:9` desenha **oito** itens; o código tem quatro. Faltam
-      ATIVIDADES, EXPLORAR, BIBLIOTECA e TEMAS, cujas telas não existem
+- [ ] A barra `596:9` desenha **oito** itens; o código tem seis. Faltam
+      EXPLORAR e TEMAS, cujas telas não existem
 - [ ] `595:7` tem "SALVAR RASCUNHO" e "REVISAR PROGRAMAÇÃO", mas **não existe
       tela de revisão da programação** no arquivo, nem estado de rascunho para a
       edição. O código continua com uma ação só, que programa direto

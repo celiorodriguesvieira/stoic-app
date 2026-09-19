@@ -1,26 +1,31 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
-import { CampoTexto } from '@/components/admin/campos';
-import { Aviso, Carregando, ErroRecuperavel } from '@/components/admin/estados';
-import { BotaoVoltar } from '@/components/admin/navegacao';
-import { CaixaSecao, Linha, PaginaAdmin } from '@/components/admin/pagina';
-import { Retrato } from '@/components/admin/retrato';
-import { Button } from '@/components/ui/button';
-import { Text } from '@/components/ui/text';
+import { CampoTexto } from '@/components/admin/Campos';
+import { Aviso, Carregando, ErroRecuperavel } from '@/components/admin/Estados';
+import { BotaoVoltar } from '@/components/admin/Navegacao';
+import { CaixaSecao, Linha, PaginaAdmin } from '@/components/admin/Pagina';
+import { Retrato } from '@/components/admin/Retrato';
+import { Button } from '@/components/ui/Button';
+import { Text } from '@/components/ui/Text';
 import { useTheme } from '@/hooks/use-theme';
 import { criarFilosofo, mensagemDeErro, salvarFilosofo } from '@/lib/admin/repositorio';
 import {
   filosofoVazio,
+  NIVEIS,
   pendenciasDoFilosofo,
+  ROTULO_NIVEL,
+  type IntroducaoDoFilosofo,
+  type Nivel,
   type RascunhoFilosofo,
 } from '@/lib/admin/tipos';
 import { useFilosofos } from '@/lib/admin/use-filosofos';
 import { ACERVO_DE_RETRATOS, retratoDoAcervo } from '@/lib/retratos';
 import { radius, spacing } from '@/theme';
 
-type Gravacao = { estado: 'ocioso' } | { estado: 'salvando' } | { estado: 'erro'; mensagem: string };
+type Gravacao =
+  { estado: 'ocioso' } | { estado: 'salvando' } | { estado: 'erro'; mensagem: string };
 
 /** Telas `643:948` (editar) e `643:1215` (novo) — o mesmo formulário. */
 export default function AdminFilosofoScreen() {
@@ -34,6 +39,7 @@ export default function AdminFilosofoScreen() {
   const [gravacao, setGravacao] = useState<Gravacao>({ estado: 'ocioso' });
   const [tocado, setTocado] = useState(false);
   const [escolherAberto, setEscolherAberto] = useState(false);
+  const [nivel, setNivel] = useState<Nivel>('leigo');
   const hidratado = useRef(false);
 
   const existente = criando ? null : filosofos.find((filosofo) => filosofo.id === id);
@@ -44,16 +50,23 @@ export default function AdminFilosofoScreen() {
     if (criando || hidratado.current || !existente) return;
 
     hidratado.current = true;
-    setRascunho({
-      nome: existente.nome,
-      biografia: existente.biografia,
-      portraitAssetId: existente.portraitAssetId,
-    });
+    const { id: _id, atualizadoEm: _atualizadoEm, ...campos } = existente;
+    setRascunho(campos);
   }, [criando, existente]);
 
   const pendencias = pendenciasDoFilosofo(rascunho);
   const salvando = gravacao.estado === 'salvando';
   const escolhido = retratoDoAcervo(rascunho.portraitAssetId);
+
+  function alterarIntroducao(campo: keyof IntroducaoDoFilosofo, valor: string) {
+    setRascunho((atual) => ({
+      ...atual,
+      introducoes: {
+        ...atual.introducoes,
+        [nivel]: { ...atual.introducoes[nivel], [campo]: valor },
+      },
+    }));
+  }
 
   function escolherRetrato(portraitAssetId: string | null) {
     setRascunho((atual) => ({ ...atual, portraitAssetId }));
@@ -87,7 +100,9 @@ export default function AdminFilosofoScreen() {
     return (
       <PaginaAdmin
         titulo="EDITAR FILÓSOFO"
-        topo={<BotaoVoltar rotulo="← FILÓSOFOS" aoVoltar={() => router.replace('/admin/filosofos')} />}>
+        topo={
+          <BotaoVoltar rotulo="← FILÓSOFOS" aoVoltar={() => router.replace('/admin/filosofos')} />
+        }>
         <Carregando rotulo="Carregando o cadastro…" />
       </PaginaAdmin>
     );
@@ -97,7 +112,9 @@ export default function AdminFilosofoScreen() {
     return (
       <PaginaAdmin
         titulo="EDITAR FILÓSOFO"
-        topo={<BotaoVoltar rotulo="← FILÓSOFOS" aoVoltar={() => router.replace('/admin/filosofos')} />}>
+        topo={
+          <BotaoVoltar rotulo="← FILÓSOFOS" aoVoltar={() => router.replace('/admin/filosofos')} />
+        }>
         <ErroRecuperavel mensagem={erro ?? 'Este filósofo não existe no acervo.'} />
       </PaginaAdmin>
     );
@@ -111,7 +128,9 @@ export default function AdminFilosofoScreen() {
           ? 'Cadastre a identidade que será usada em todos os conteúdos.'
           : 'Identidade usada nos cards e na página do filósofo.'
       }
-      topo={<BotaoVoltar rotulo="← FILÓSOFOS" aoVoltar={() => router.replace('/admin/filosofos')} />}
+      topo={
+        <BotaoVoltar rotulo="← FILÓSOFOS" aoVoltar={() => router.replace('/admin/filosofos')} />
+      }
       nota="Para cadastrar conteúdo, basta escolher o filósofo da biblioteca. Sem retrato disponível, usar a inicial do nome.">
       <CaixaSecao titulo="FOTO DO FILÓSOFO" espacamento="sm">
         <Retrato nome={rascunho.nome} retratoId={rascunho.portraitAssetId} tamanho={160} />
@@ -183,6 +202,26 @@ export default function AdminFilosofoScreen() {
           linhas={3}
         />
 
+        <Linha>
+          <View style={styles.metade}>
+            <CampoTexto
+              rotulo="Subtítulo"
+              placeholder="Filósofo estoico e senador romano"
+              value={rascunho.subtitulo}
+              onChangeText={(subtitulo) => setRascunho((atual) => ({ ...atual, subtitulo }))}
+            />
+          </View>
+
+          <View style={styles.metade}>
+            <CampoTexto
+              rotulo="Período de vida"
+              placeholder="4 a.C. — 65 d.C."
+              value={rascunho.periodo}
+              onChangeText={(periodo) => setRascunho((atual) => ({ ...atual, periodo }))}
+            />
+          </View>
+        </Linha>
+
         {criando ? (
           <Text color="textSecondary">
             O identificador vem do nome e não muda depois. É ele que cada conteúdo guarda como
@@ -190,6 +229,62 @@ export default function AdminFilosofoScreen() {
           </Text>
         ) : null}
       </CaixaSecao>
+
+      {/*
+        "Introdução por nível *" (`673:1310`): "preencher texto e fonte de cada
+        versão". Um nível por vez, como no editor da aula, com a situação dos
+        quatro nas pílulas.
+      */}
+      <CaixaSecao titulo="INTRODUÇÃO POR NÍVEL *" espacamento="sm">
+        <Linha>
+          {NIVEIS.map((cada) => {
+            const pronto = !!rascunho.introducoes[cada].texto.trim();
+
+            return (
+              <Button
+                key={cada}
+                label={`${pronto ? '✓ ' : ''}${ROTULO_NIVEL[cada].toLocaleUpperCase('pt-BR')}`}
+                size="medium"
+                type={cada === nivel ? 'primary' : 'secondary'}
+                onPress={() => setNivel(cada)}
+                accessibilityState={{ selected: cada === nivel }}
+                style={styles.nivel}
+              />
+            );
+          })}
+        </Linha>
+
+        <CampoTexto
+          rotulo={`Título (${ROTULO_NIVEL[nivel]})`}
+          placeholder="Uma filosofia para viver melhor"
+          value={rascunho.introducoes[nivel].titulo}
+          onChangeText={(valor) => alterarIntroducao('titulo', valor)}
+        />
+
+        <CampoTexto
+          rotulo={`Texto (${ROTULO_NIVEL[nivel]}) *`}
+          placeholder="Sêneca aproxima a filosofia das escolhas que fazemos."
+          value={rascunho.introducoes[nivel].texto}
+          onChangeText={(valor) => alterarIntroducao('texto', valor)}
+          linhas={5}
+          erro={
+            tocado && !rascunho.introducoes[nivel].texto.trim()
+              ? `Escreva a introdução de ${ROTULO_NIVEL[nivel]}.`
+              : undefined
+          }
+        />
+
+        <CampoTexto
+          rotulo={`Fonte (${ROTULO_NIVEL[nivel]})`}
+          placeholder="Sobre a brevidade da vida, capítulos 1 e 3."
+          value={rascunho.introducoes[nivel].fonte}
+          onChangeText={(valor) => alterarIntroducao('fonte', valor)}
+        />
+      </CaixaSecao>
+
+      {tocado && pendencias.length > 0 ? (
+        <Aviso mensagem={pendencias.join(' ')} tom="erro" />
+      ) : null}
 
       {gravacao.estado === 'erro' ? <Aviso mensagem={gravacao.mensagem} tom="erro" /> : null}
 
@@ -247,6 +342,14 @@ function OpcaoDeRetrato({
 }
 
 const styles = StyleSheet.create({
+  metade: {
+    flexGrow: 1,
+    flexBasis: 320,
+  },
+  nivel: {
+    flexGrow: 1,
+    flexBasis: 160,
+  },
   acao: {
     paddingHorizontal: spacing['2xl'],
     alignSelf: 'flex-start',

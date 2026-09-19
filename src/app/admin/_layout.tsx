@@ -2,10 +2,10 @@ import { Stack, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { Carregando } from '@/components/admin/estados';
-import { PaginaAdmin } from '@/components/admin/pagina';
-import { Button } from '@/components/ui/button';
-import { Text } from '@/components/ui/text';
+import { Carregando } from '@/components/admin/Estados';
+import { PaginaAdmin } from '@/components/admin/Pagina';
+import { Button } from '@/components/ui/Button';
+import { Text } from '@/components/ui/Text';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth-context';
 import { spacing } from '@/theme';

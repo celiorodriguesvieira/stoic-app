@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { Checkbox } from '@/components/ui/checkbox';
-import { Text } from '@/components/ui/text';
+import { Checkbox } from '@/components/ui/Checkbox';
+import { Text } from '@/components/ui/Text';
 import { useTheme } from '@/hooks/use-theme';
 import { radius, spacing } from '@/theme';
 

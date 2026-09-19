@@ -265,6 +265,12 @@ export type DadosDaAula = {
   fraseDestaque: string;
   /** Duração estimada em minutos — o "3 MIN" do card da Home. */
   duracaoMinutos: number;
+  /**
+   * "Atividade da semana *" (`668:202`, etapa 3). Uma só para os quatro
+   * níveis: a atividade tem uma versão editorial por publicação, não uma por
+   * nível (`668:142`). Vazio = ainda não vinculada.
+   */
+  atividadeId: string;
   etapas: EtapasPorNivel;
 };
 
@@ -272,6 +278,7 @@ export function aulaVazia(): DadosDaAula {
   return {
     fraseDestaque: '',
     duracaoMinutos: 3,
+    atividadeId: '',
     etapas: {
       leigo: etapasVazias(),
       curioso: etapasVazias(),
@@ -368,6 +375,9 @@ export function pendenciasDaIdentificacao(conteudo: RascunhoConteudo): string[] 
  */
 export function pendenciasDaAula(conteudo: RascunhoConteudo): string[] {
   const pendencias = pendenciasDaIdentificacao(conteudo);
+
+  // Vale para os quatro níveis, então entra uma vez, e não na lista de cada um.
+  if (!conteudo.aula.atividadeId) pendencias.push('Escolha a atividade da semana.');
 
   for (const nivel of NIVEIS) {
     const faltando = pendenciasDoNivel(conteudo.aula.etapas[nivel]);
@@ -593,21 +603,69 @@ export type Filosofo = {
    * o app mostrar a inicial do nome.
    */
   portraitAssetId: string | null;
+  /**
+   * "Subtítulo e período de vida" (`673:1306`): as duas linhas do card escuro
+   * da página do filósofo (`431:310`) — "Filósofo estoico e senador romano",
+   * "4 a.C. — 65 d.C.". Separados porque o card os mostra em linhas e pesos
+   * diferentes.
+   */
+  subtitulo: string;
+  periodo: string;
+  /**
+   * "Introdução por nível *" (`673:1310`): "preencher texto e fonte de cada
+   * versão". É o que a página do filósofo mostra abaixo do seletor de nível
+   * (`420:87`): título, texto e o "Ponto de partida".
+   */
+  introducoes: IntroducaoPorNivel;
   atualizadoEm: number;
 };
 
-/** O que o formulário edita. Id e data são do repositório. */
-export type RascunhoFilosofo = Pick<Filosofo, 'nome' | 'biografia' | 'portraitAssetId'>;
+export type IntroducaoDoFilosofo = {
+  /** "Uma filosofia para viver melhor". */
+  titulo: string;
+  texto: string;
+  /** Obra e trecho — o "Ponto de partida" do `420:87`. */
+  fonte: string;
+};
 
-export function filosofoVazio(): RascunhoFilosofo {
-  return { nome: '', biografia: '', portraitAssetId: null };
+export type IntroducaoPorNivel = Record<Nivel, IntroducaoDoFilosofo>;
+
+export function introducoesVazias(): IntroducaoPorNivel {
+  const vazia = (): IntroducaoDoFilosofo => ({ titulo: '', texto: '', fonte: '' });
+
+  return { leigo: vazia(), curioso: vazia(), estudioso: vazia(), erudito: vazia() };
 }
 
-/** Nome é obrigatório e não pode ser só espaço em branco (contrato `643:1269`). */
+/** O que o formulário edita. Id e data são do repositório. */
+export type RascunhoFilosofo = Omit<Filosofo, 'id' | 'atualizadoEm'>;
+
+export function filosofoVazio(): RascunhoFilosofo {
+  return {
+    nome: '',
+    biografia: '',
+    portraitAssetId: null,
+    subtitulo: '',
+    periodo: '',
+    introducoes: introducoesVazias(),
+  };
+}
+
+/**
+ * Nome é obrigatório e não pode ser só espaço em branco (contrato `643:1269`).
+ * A introdução também, nos quatro níveis: o campo é "Introdução por nível *"
+ * (`673:1310`), e a página do filósofo abre no nível de quem lê.
+ */
 export function pendenciasDoFilosofo(rascunho: RascunhoFilosofo): string[] {
   const pendencias: string[] = [];
 
   if (!rascunho.nome.trim()) pendencias.push('Informe o nome do filósofo.');
+
+  const faltando = NIVEIS.filter((nivel) => !rascunho.introducoes[nivel].texto.trim());
+  if (faltando.length > 0) {
+    pendencias.push(
+      `Escreva a introdução de ${faltando.map((nivel) => ROTULO_NIVEL[nivel]).join(', ')}.`,
+    );
+  }
 
   return pendencias;
 }
@@ -618,3 +676,470 @@ export function inicialDoNome(nome: string): string {
 }
 
 export type Tema = { id: string; nome: string };
+
+// --- Biblioteca --------------------------------------------------------------
+
+/**
+ * Recurso curado da Biblioteca (`668:203` vídeo, `779:143` livro).
+ *
+ * Coleção própria, fora do acervo de conteúdos: o contrato separa os dois
+ * formulários ("Vídeo do YouTube e Livro") e o recurso não tem níveis, autor
+ * do acervo nem aplicação. Enfiá-lo em `conteudos` obrigaria cada tela do
+ * catálogo a saber ignorar metade dos campos.
+ *
+ * O contrato chama os tipos de `youtube | book`; aqui ficam em português, como
+ * o resto do modelo.
+ */
+export const TIPOS_RECURSO = ['video', 'livro'] as const;
+export type TipoRecurso = (typeof TIPOS_RECURSO)[number];
+
+export const ROTULO_TIPO_RECURSO: Record<TipoRecurso, string> = {
+  video: 'Vídeo',
+  livro: 'Livro',
+};
+
+export type RecursoBiblioteca = {
+  id: string;
+  tipo: TipoRecurso;
+  titulo: string;
+  /** Canal ou criador do vídeo; autor do livro. */
+  criador: string;
+  /** Link do YouTube (vídeo) ou da loja (livro). Sempre HTTPS. */
+  url: string;
+  /**
+   * Extraído do link na gravação, nunca digitado. O app monta o player a
+   * partir dele — "o sistema extrai videoId e constrói embed seguro, sem
+   * aceitar HTML" (`668:156`). Nulo em livro e em link que não é de vídeo.
+   */
+  videoId: string | null;
+  /** Só livro, opcional. */
+  edicao: string;
+  /** Só livro. Padrão Não (`668:156`). */
+  afiliado: boolean;
+  /** "Por que recomendamos". */
+  recomendacao: string;
+  status: StatusConteudo;
+  atualizadoEm: number;
+  /** Mesma trava de conflito do conteúdo. */
+  versao: number;
+};
+
+export type RascunhoRecurso = Omit<
+  RecursoBiblioteca,
+  'id' | 'status' | 'atualizadoEm' | 'versao' | 'videoId'
+>;
+
+export function recursoVazio(tipo: TipoRecurso = 'video'): RascunhoRecurso {
+  return { tipo, titulo: '', criador: '', url: '', edicao: '', afiliado: false, recomendacao: '' };
+}
+
+export function paraRascunhoDeRecurso(recurso: RecursoBiblioteca): RascunhoRecurso {
+  const { id, status, atualizadoEm, versao, videoId, ...rascunho } = recurso;
+
+  return rascunho;
+}
+
+/** Limites de título do contrato `668:121` ("título 3–120 caracteres"). */
+export const MIN_TITULO = 3;
+export const MAX_TITULO = 120;
+
+const HTTPS = /^https:\/\/[^\s/?#]+\.[^\s/?#]+(?:[/?#]\S*)?$/i;
+
+export function urlHttps(url: string): boolean {
+  return HTTPS.test(url.trim());
+}
+
+/**
+ * Formas aceitas de link de vídeo do YouTube. Expressões, e não `new URL`,
+ * porque o `URL` do React Native não implementa `hostname` nem `searchParams`.
+ */
+const LINKS_YOUTUBE = [
+  /^https:\/\/(?:www\.|m\.)?youtube\.com\/watch\?(?:[^#]*&)?v=([A-Za-z0-9_-]{11})(?:[&#]|$)/i,
+  /^https:\/\/(?:www\.|m\.)?youtube\.com\/(?:shorts|embed|live)\/([A-Za-z0-9_-]{11})(?:[/?#]|$)/i,
+  /^https:\/\/youtu\.be\/([A-Za-z0-9_-]{11})(?:[/?#]|$)/i,
+];
+
+/** Id do vídeo, ou nulo quando o link não é de um vídeo do YouTube. */
+export function idDoVideoDoYoutube(url: string): string | null {
+  const limpo = url.trim();
+
+  for (const forma of LINKS_YOUTUBE) {
+    const casa = forma.exec(limpo);
+    if (casa) return casa[1];
+  }
+
+  return null;
+}
+
+/** Player oficial, sem reprodução automática (`668:156`). */
+export function enderecoDoPlayer(videoId: string): string {
+  return `https://www.youtube.com/embed/${videoId}`;
+}
+
+export type CampoRecurso = 'titulo' | 'criador' | 'url' | 'recomendacao';
+
+/**
+ * Erros por campo — "publicar lista erros por campo" (`668:121`). A ordem é a
+ * do formulário, para a lista ler de cima para baixo como a tela.
+ */
+export function errosDoRecurso(recurso: RascunhoRecurso): Partial<Record<CampoRecurso, string>> {
+  const erros: Partial<Record<CampoRecurso, string>> = {};
+  const video = recurso.tipo === 'video';
+
+  const titulo = recurso.titulo.trim().length;
+  if (titulo < MIN_TITULO || titulo > MAX_TITULO) {
+    erros.titulo = `Título: de ${MIN_TITULO} a ${MAX_TITULO} caracteres.`;
+  }
+
+  if (!recurso.criador.trim()) {
+    erros.criador = video ? 'Informe o canal ou criador.' : 'Informe o autor do livro.';
+  }
+
+  if (video) {
+    if (!idDoVideoDoYoutube(recurso.url)) {
+      erros.url = 'Use o link HTTPS de um vídeo do YouTube.';
+    }
+  } else if (!urlHttps(recurso.url)) {
+    erros.url = 'Use um link HTTPS da loja.';
+  }
+
+  if (!recurso.recomendacao.trim()) {
+    erros.recomendacao = 'Diga por que recomendamos.';
+  }
+
+  return erros;
+}
+
+export function pendenciasDoRecurso(recurso: RascunhoRecurso): string[] {
+  return Object.values(errosDoRecurso(recurso));
+}
+
+// --- Atividades --------------------------------------------------------------
+
+/**
+ * Atividade — prática curta da aba Atividades (`66:2`), cadastrada no painel
+ * (`643:1270` lista, `643:1271`/`644:104`/`644:1271` editor, `643:1272` prévia).
+ *
+ * Contrato `668:142`: "Atividades têm uma versão editorial por publicação;
+ * não exigir quatro níveis sem conteúdo aprovado para eles." Por isso não há
+ * texto por nível aqui, ao contrário da aula.
+ *
+ * O contrato chama os tipos de ordenação/reflexão/situação; a situação
+ * contextual de golpes é uma variante da situação (mensagem simulada), não um
+ * quarto tipo.
+ */
+export const TIPOS_ATIVIDADE = ['ordenacao', 'reflexao', 'situacao'] as const;
+export type TipoAtividade = (typeof TIPOS_ATIVIDADE)[number];
+
+export const ROTULO_TIPO_ATIVIDADE: Record<TipoAtividade, string> = {
+  ordenacao: 'Ordenação',
+  reflexao: 'Reflexão',
+  situacao: 'Situação',
+};
+
+/** "Duração inteira 1–120 min" (`668:142`). */
+export const MIN_DURACAO_ATIVIDADE = 1;
+export const MAX_DURACAO_ATIVIDADE = 120;
+
+/** "2–12 blocos" (`668:142`). */
+export const MIN_BLOCOS = 2;
+export const MAX_BLOCOS = 12;
+
+/** "2–6 alternativas distintas e seleção única" (`668:142`). */
+export const MIN_ALTERNATIVAS = 2;
+export const MAX_ALTERNATIVAS = 6;
+
+function idSorteado(prefixo: string): string {
+  return `${prefixo}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/**
+ * Bloco da ordenação. "IDs estáveis, texto e flag de distrator" (`668:142`):
+ * a tentativa da pessoa guarda ids, então corrigir a redação de um bloco não
+ * reescreve o que já foi respondido.
+ */
+export type BlocoOrdenacao = { id: string; texto: string; distrator: boolean };
+
+export function novoBloco(distrator = false): BlocoOrdenacao {
+  return { id: idSorteado('bl'), texto: '', distrator };
+}
+
+export type DinamicaOrdenacao = {
+  /** "Frase-base (opcional)" — o começo que os blocos completam. */
+  fraseBase: string;
+  /**
+   * A ordem da lista **é** o gabarito: os blocos que não são distratores, na
+   * ordem em que aparecem, formam a sequência correta. O app embaralha na
+   * apresentação — "embaralhar apresentação, não gabarito".
+   */
+  blocos: BlocoOrdenacao[];
+  /** "Mensagem de tentativa … obrigatória" — o que se diz quando a ordem não confere. */
+  mensagemTentativa: string;
+  /** "Explicação após conferir *" (`644:104`). */
+  explicacao: string;
+};
+
+/** Sequência correta: ids dos blocos não distratores, na ordem da lista. */
+export function sequenciaCorreta(dinamica: DinamicaOrdenacao): string[] {
+  return dinamica.blocos.filter((bloco) => !bloco.distrator).map((bloco) => bloco.id);
+}
+
+/**
+ * Alternativa de reflexão ou situação. A devolutiva mora na própria
+ * alternativa para não depender de posição — ver `OpcaoReflexao`.
+ */
+export type AlternativaAtividade = { id: string; texto: string; devolutiva: string };
+
+export function novaAlternativa(): AlternativaAtividade {
+  return { id: idSorteado('alt'), texto: '', devolutiva: '' };
+}
+
+/**
+ * "Modo orientado: uma resposta indicada e explicação para cada alternativa.
+ * Modo livre: sem gabarito, acerto, erro, nota ou ranking" (`668:142`).
+ */
+export const MODOS_RESPOSTA = ['orientado', 'livre'] as const;
+export type ModoResposta = (typeof MODOS_RESPOSTA)[number];
+
+export const ROTULO_MODO_RESPOSTA: Record<ModoResposta, string> = {
+  orientado: 'Com resposta orientadora',
+  livre: 'Reflexão livre (sem certo ou errado)',
+};
+
+/** No modo livre, "devolutiva comum ou por escolha" (`668:142`). */
+export const DEVOLUTIVAS_LIVRES = ['comum', 'porEscolha'] as const;
+export type DevolutivaLivre = (typeof DEVOLUTIVAS_LIVRES)[number];
+
+export const ROTULO_DEVOLUTIVA_LIVRE: Record<DevolutivaLivre, string> = {
+  comum: 'Devolutiva comum a todas as escolhas',
+  porEscolha: 'Devolutiva por alternativa',
+};
+
+/**
+ * Variante "mensagem simulada" da situação (`644:1271`, `668:142`).
+ *
+ * "Nunca tornar o endereço suspeito clicável": `endereco` é texto, e é texto
+ * que o app deve mostrar — nunca um link.
+ */
+export type MensagemSimulada = {
+  remetente: string;
+  /** Telefone ou e-mail já mascarado pela redação. */
+  identificador: string;
+  corpo: string;
+  endereco: string;
+  observacao: string;
+};
+
+export function mensagemSimuladaVazia(): MensagemSimulada {
+  return { remetente: '', identificador: '', corpo: '', endereco: '', observacao: '' };
+}
+
+export type DinamicaEscolha = {
+  /** O cenário do card ("Uma pessoa não respondeu à sua mensagem."). */
+  situacao: string;
+  /** A pergunta acima das alternativas ("O que depende de você?"). */
+  pergunta: string;
+  alternativas: AlternativaAtividade[];
+  modo: ModoResposta;
+  /** Só no modo orientado: id da alternativa indicada. */
+  respostaId: string;
+  /** Só no modo livre. */
+  devolutivaLivre: DevolutivaLivre;
+  /** Só no modo livre com devolutiva comum. */
+  devolutivaComum: string;
+  /** Só em situação, e só quando aplicável. */
+  mensagem: MensagemSimulada | null;
+};
+
+export type ConclusaoAtividade = {
+  /** "ONDE SUA AÇÃO COMEÇA" — o título da tela de conclusão. */
+  titulo: string;
+  /** O aprendizado que fecha a atividade. */
+  texto: string;
+};
+
+export type Atividade = {
+  id: string;
+  tipo: TipoAtividade;
+  titulo: string;
+  duracaoMinutos: number;
+  instrucao: string;
+  /** Opcionais — "authorIds/contentRef opcionais" (`668:142`). Vazio = nenhum. */
+  filosofoId: string;
+  temaIds: string[];
+  conteudoId: string;
+  /**
+   * As duas dinâmicas ficam no registro, e o `tipo` diz qual vale. Assim trocar
+   * o tipo no formulário e voltar não apaga o que já se escreveu na outra.
+   */
+  ordenacao: DinamicaOrdenacao;
+  escolha: DinamicaEscolha;
+  conclusao: ConclusaoAtividade;
+  status: StatusConteudo;
+  atualizadoEm: number;
+  /** Mesma trava de conflito do conteúdo. */
+  versao: number;
+};
+
+export type RascunhoAtividade = Omit<Atividade, 'id' | 'status' | 'atualizadoEm' | 'versao'>;
+
+export function ordenacaoVazia(): DinamicaOrdenacao {
+  return {
+    fraseBase: '',
+    blocos: [novoBloco(), novoBloco(true)],
+    mensagemTentativa: '',
+    explicacao: '',
+  };
+}
+
+export function escolhaVazia(tipo: TipoAtividade = 'reflexao'): DinamicaEscolha {
+  return {
+    situacao: '',
+    pergunta: '',
+    alternativas: [novaAlternativa(), novaAlternativa()],
+    // O desenho abre a reflexão orientada e a situação livre (`643:1271`,
+    // `644:1271`); os dois modos continuam disponíveis nos dois tipos.
+    modo: tipo === 'situacao' ? 'livre' : 'orientado',
+    respostaId: '',
+    devolutivaLivre: 'comum',
+    devolutivaComum: '',
+    mensagem: null,
+  };
+}
+
+export function atividadeVazia(tipo: TipoAtividade = 'reflexao'): RascunhoAtividade {
+  return {
+    tipo,
+    titulo: '',
+    duracaoMinutos: 3,
+    instrucao: '',
+    filosofoId: '',
+    temaIds: [],
+    conteudoId: '',
+    ordenacao: ordenacaoVazia(),
+    escolha: escolhaVazia(tipo),
+    conclusao: { titulo: '', texto: '' },
+  };
+}
+
+export function paraRascunhoDeAtividade(atividade: Atividade): RascunhoAtividade {
+  const { id, status, atualizadoEm, versao, ...rascunho } = atividade;
+
+  return rascunho;
+}
+
+export type CampoAtividade =
+  | 'titulo'
+  | 'duracao'
+  | 'instrucao'
+  | 'cenario'
+  | 'itens'
+  | 'resposta'
+  | 'devolutiva'
+  | 'tentativa'
+  | 'explicacao'
+  | 'mensagem'
+  | 'conclusao';
+
+function repetidos(textos: string[]): boolean {
+  const normalizados = textos.map((texto) => texto.trim().toLocaleLowerCase('pt-BR'));
+
+  return new Set(normalizados).size !== normalizados.length;
+}
+
+/**
+ * Erros por campo, na ordem do formulário. Lista vazia = pode publicar.
+ *
+ * É a checagem do rodapé da prévia (`643:1272`): "Validar: título, tipo,
+ * duração, instrução, dinâmica completa e conclusão. Confirmar resposta
+ * orientadora quando aplicável."
+ */
+export function errosDaAtividade(
+  atividade: RascunhoAtividade,
+): Partial<Record<CampoAtividade, string>> {
+  const erros: Partial<Record<CampoAtividade, string>> = {};
+
+  const titulo = atividade.titulo.trim().length;
+  if (titulo < MIN_TITULO || titulo > MAX_TITULO) {
+    erros.titulo = `Título: de ${MIN_TITULO} a ${MAX_TITULO} caracteres.`;
+  }
+
+  const duracao = atividade.duracaoMinutos;
+  if (
+    !Number.isInteger(duracao) ||
+    duracao < MIN_DURACAO_ATIVIDADE ||
+    duracao > MAX_DURACAO_ATIVIDADE
+  ) {
+    erros.duracao = `Duração: minutos inteiros, de ${MIN_DURACAO_ATIVIDADE} a ${MAX_DURACAO_ATIVIDADE}.`;
+  }
+
+  if (!atividade.instrucao.trim()) erros.instrucao = 'Escreva a instrução.';
+
+  if (atividade.tipo === 'ordenacao') {
+    const { blocos, mensagemTentativa, explicacao } = atividade.ordenacao;
+
+    if (blocos.length < MIN_BLOCOS || blocos.length > MAX_BLOCOS) {
+      erros.itens = `Use de ${MIN_BLOCOS} a ${MAX_BLOCOS} blocos.`;
+    } else if (blocos.some((bloco) => !bloco.texto.trim())) {
+      erros.itens = 'Todo bloco precisa de texto.';
+    } else if (repetidos(blocos.map((bloco) => bloco.texto))) {
+      erros.itens = 'Há blocos com o mesmo texto.';
+    } else if (blocos.every((bloco) => bloco.distrator)) {
+      erros.itens = 'A sequência correta precisa de ao menos um bloco que não seja distrator.';
+    }
+
+    if (!mensagemTentativa.trim()) erros.tentativa = 'Escreva a mensagem de nova tentativa.';
+    if (!explicacao.trim()) erros.explicacao = 'Escreva a explicação após conferir.';
+  } else {
+    const escolha = atividade.escolha;
+
+    if (!escolha.situacao.trim() || !escolha.pergunta.trim()) {
+      erros.cenario = 'Escreva a situação e a pergunta.';
+    }
+
+    const { alternativas } = escolha;
+    if (alternativas.length < MIN_ALTERNATIVAS || alternativas.length > MAX_ALTERNATIVAS) {
+      erros.itens = `Use de ${MIN_ALTERNATIVAS} a ${MAX_ALTERNATIVAS} alternativas.`;
+    } else if (alternativas.some((alternativa) => !alternativa.texto.trim())) {
+      erros.itens = 'Toda alternativa precisa de texto.';
+    } else if (repetidos(alternativas.map((alternativa) => alternativa.texto))) {
+      erros.itens = 'As alternativas precisam ser distintas.';
+    }
+
+    const semDevolutiva = alternativas.some((alternativa) => !alternativa.devolutiva.trim());
+
+    if (escolha.modo === 'orientado') {
+      if (!alternativas.some((alternativa) => alternativa.id === escolha.respostaId)) {
+        erros.resposta = 'Indique a resposta orientadora.';
+      }
+      if (semDevolutiva) erros.devolutiva = 'Escreva a devolutiva de cada alternativa.';
+    } else if (escolha.devolutivaLivre === 'comum') {
+      if (!escolha.devolutivaComum.trim()) erros.devolutiva = 'Escreva a devolutiva comum.';
+    } else if (semDevolutiva) {
+      erros.devolutiva = 'Escreva a devolutiva de cada alternativa.';
+    }
+
+    const mensagem = atividade.tipo === 'situacao' ? escolha.mensagem : null;
+    if (
+      mensagem &&
+      (!mensagem.remetente.trim() || !mensagem.corpo.trim() || !mensagem.observacao.trim())
+    ) {
+      erros.mensagem = 'Mensagem simulada: informe remetente, corpo e orientação de observação.';
+    }
+  }
+
+  if (!atividade.conclusao.titulo.trim() || !atividade.conclusao.texto.trim()) {
+    erros.conclusao = 'Escreva o título e o aprendizado da conclusão.';
+  }
+
+  return erros;
+}
+
+export function pendenciasDaAtividade(atividade: RascunhoAtividade): string[] {
+  return Object.values(errosDaAtividade(atividade));
+}
+
+/** "Reflexão • 3 min" — a linha de apoio da lista (`643:1270`) e do app (`66:5`). */
+export function resumoDaAtividade(atividade: Pick<Atividade, 'tipo' | 'duracaoMinutos'>): string {
+  return `${ROTULO_TIPO_ATIVIDADE[atividade.tipo]} • ${atividade.duracaoMinutos} min`;
+}

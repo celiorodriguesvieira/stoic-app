@@ -74,6 +74,24 @@ service cloud.firestore {
       allow delete: if ehAdmin();
     }
 
+    // --- Biblioteca --------------------------------------------------------
+    // Mesma regra dos conteúdos: o app só enxerga o publicado; rascunho e
+    // arquivado ficam com a redação.
+    match /biblioteca/{id} {
+      allow read: if autenticado() && (resource.data.status == 'publicado' || ehEditor());
+      allow create, update: if ehEditor();
+      allow delete: if ehAdmin();
+    }
+
+    // --- Atividades --------------------------------------------------------
+    // Mesma regra dos conteúdos: "apenas atividades publicadas aparecem no
+    // app" (`643:1270`); rascunho e arquivado ficam com a redação.
+    match /atividades/{id} {
+      allow read: if autenticado() && (resource.data.status == 'publicado' || ehEditor());
+      allow create, update: if ehEditor();
+      allow delete: if ehAdmin();
+    }
+
     // --- Filósofos ---------------------------------------------------------
     match /filosofos/{id} {
       // O app inteiro mostra nome e foto do filósofo nos cards: leitura é de

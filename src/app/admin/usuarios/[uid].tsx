@@ -2,12 +2,12 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { StyleSheet } from 'react-native';
 
-import { CampoSelecao } from '@/components/admin/campos';
-import { Aviso, Carregando, ErroRecuperavel } from '@/components/admin/estados';
-import { BotaoVoltar } from '@/components/admin/navegacao';
-import { CaixaSecao, Linha, PaginaAdmin } from '@/components/admin/pagina';
-import { Button } from '@/components/ui/button';
-import { Text } from '@/components/ui/text';
+import { CampoSelecao } from '@/components/admin/Campos';
+import { Aviso, Carregando, ErroRecuperavel } from '@/components/admin/Estados';
+import { BotaoVoltar } from '@/components/admin/Navegacao';
+import { CaixaSecao, Linha, PaginaAdmin } from '@/components/admin/Pagina';
+import { Button } from '@/components/ui/Button';
+import { Text } from '@/components/ui/Text';
 import { alterarPapel, observarUsuarios } from '@/lib/admin/repositorio';
 import { useAuth } from '@/lib/auth-context';
 import { DESCRICAO_PAPEL, PAPEIS, ROTULO_PAPEL, type Papel, type PerfilUsuario } from '@/lib/perfil';

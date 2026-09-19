@@ -1,6 +1,6 @@
 import { StyleSheet, View, type ViewProps } from 'react-native';
 
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import type { ThemeColor } from '@/theme';
 
 export type CitacaoAutoriaProps = ViewProps & {

@@ -1,3 +1,4 @@
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
@@ -11,13 +12,13 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Avatar } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
-import { Text } from '@/components/ui/text';
+import { Avatar } from '@/components/ui/Avatar';
+import { Button } from '@/components/ui/Button';
+import { Text } from '@/components/ui/Text';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth-context';
 import { salvarPreferencias } from '@/lib/perfil';
-import { minTouchTarget, radius, spacing } from '@/theme';
+import { minTouchTarget, spacing } from '@/theme';
 
 /** Largura do painel (item 11): `min(342px, 100vw)`. */
 const LARGURA = 342;
@@ -113,9 +114,7 @@ export function MenuSeuEspaco({ aberto, aoFechar }: { aberto: boolean; aoFechar:
 
               <View style={styles.identidadeTexto}>
                 <Text>{nome || 'Sua conta'}</Text>
-                <Text variant="bodySmall" color="textSecondary">
-                  Sua conta PAUSA.
-                </Text>
+                <Text>Sua conta PAUSA.</Text>
               </View>
             </View>
 
@@ -123,7 +122,6 @@ export function MenuSeuEspaco({ aberto, aoFechar }: { aberto: boolean; aoFechar:
               label="EDITAR PERFIL"
               type="secondary"
               size="medium"
-              shape="rounded"
               onPress={() => irPara('/perfil')}
             />
 
@@ -136,19 +134,11 @@ export function MenuSeuEspaco({ aberto, aoFechar }: { aberto: boolean; aoFechar:
             <Button
               label="MAIS PREFERÊNCIAS →"
               type="secondary"
-              size="medium"
-              shape="rounded"
               onPress={() => irPara('/preferencias')}
             />
 
-            <View style={styles.apoio}>
-              <Text variant="bodySmall" color="textSecondary">
-                Rotina e acessibilidade
-              </Text>
-              <Text variant="bodySmall" color="textSecondary">
-                Suas preferências ficam vinculadas à sua conta.
-              </Text>
-            </View>
+            <Text variant="labelMetadata">Rotina e acessibilidade</Text>
+            <Text variant="labelMetadata">Suas preferências ficam vinculadas à sua conta.</Text>
 
             {/*
               Não há entrada para o painel aqui, e isso é decisão de desenho,
@@ -175,18 +165,17 @@ export function MenuSeuEspaco({ aberto, aoFechar }: { aberto: boolean; aoFechar:
 }
 
 function BotaoFechar({ aoFechar }: { aoFechar: () => void }) {
-  const { colors } = useTheme();
-
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel="Fechar menu"
       onPress={aoFechar}
       style={styles.alvo}>
-      <View style={styles.xis}>
-        <View style={[styles.barraXis, styles.barraDireita, { backgroundColor: colors.text }]} />
-        <View style={[styles.barraXis, styles.barraEsquerda, { backgroundColor: colors.text }]} />
-      </View>
+      <Image
+        source={require('@/assets/images/icones/fechar.svg')}
+        style={styles.icone}
+        contentFit="contain"
+      />
     </Pressable>
   );
 }
@@ -237,37 +226,41 @@ function NivelDeLeitura({
     }
   }
 
+  // O aviso fica fora do grupo do seletor: no desenho ele é mais um item da
+  // coluna, a 24px, e não uma legenda colada a 8px.
   return (
-    <View style={styles.apoio}>
-      <Text variant="supportSemibold">NÍVEL DE LEITURA</Text>
+    <>
+      <View style={styles.apoio}>
+        <Text variant="labelMetadata" color="textSecondary">
+          NÍVEL DE LEITURA
+        </Text>
 
-      <View style={[styles.niveis, { borderColor: colors.border }]}>
-        {NIVEIS.map((nivel) => {
-          const ativo = nivel.id === escolhido;
+        <View style={[styles.niveis, { borderColor: colors.border }]}>
+          {NIVEIS.map((nivel) => {
+            const ativo = nivel.id === escolhido;
 
-          return (
-            <Pressable
-              key={nivel.id}
-              accessibilityRole="radio"
-              accessibilityState={{ checked: ativo }}
-              accessibilityLabel={nivel.rotulo}
-              onPress={() => escolher(nivel.id)}
-              style={[styles.nivel, ativo && { backgroundColor: colors.selected }]}>
-              <Text variant="bodySmall" color={ativo ? 'text' : 'textSecondary'}>
-                {nivel.rotulo}
-              </Text>
-            </Pressable>
-          );
-        })}
+            return (
+              <Pressable
+                key={nivel.id}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: ativo }}
+                accessibilityLabel={nivel.rotulo}
+                onPress={() => escolher(nivel.id)}
+                style={[styles.nivel, ativo && { backgroundColor: colors.canvas }]}>
+                <Text variant="labelMetadata">{nivel.rotulo}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
       </View>
 
       <Text
-        variant="bodySmall"
-        color={erro ? 'error' : 'textSecondary'}
+        variant="labelMetadata"
+        color={erro ? 'error' : 'text'}
         accessibilityLiveRegion="polite">
         {erro ?? 'Você pode mudar seu nível a qualquer momento.'}
       </Text>
-    </View>
+    </>
   );
 }
 
@@ -310,7 +303,6 @@ function SairDaConta({
         label={saida.estado === 'saindo' ? 'SAINDO…' : 'SAIR DA CONTA'}
         type="secondary"
         size="medium"
-        shape="rounded"
         disabled={saida.estado === 'saindo'}
         onPress={sair}
         accessibilityLabel="Sair da conta"
@@ -337,7 +329,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     left: 0,
-    backgroundColor: 'rgba(23, 21, 21, 0.45)',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
   },
   painel: {
     width: '100%',
@@ -370,15 +362,16 @@ const styles = StyleSheet.create({
   niveis: {
     flexDirection: 'row',
     borderWidth: 1,
-    borderRadius: radius.md,
+    borderRadius: 10,
     overflow: 'hidden',
   },
   nivel: {
     flex: 1,
-    minHeight: minTouchTarget,
+    minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.xs,
+    borderRadius: 9,
   },
   alvo: {
     width: minTouchTarget,
@@ -387,22 +380,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: -spacing.md,
   },
-  xis: {
+  icone: {
     width: 24,
     height: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  barraXis: {
-    position: 'absolute',
-    width: 20,
-    height: 2,
-    borderRadius: 1,
-  },
-  barraDireita: {
-    transform: [{ rotate: '45deg' }],
-  },
-  barraEsquerda: {
-    transform: [{ rotate: '-45deg' }],
   },
 });

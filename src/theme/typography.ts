@@ -131,6 +131,7 @@ export const typography = {
     fontFamily: fontFamily.bodyStrong,
     fontSize: 12,
     lineHeight: 16,
+    letterSpacing: 0.2,
     ...weight,
   },
 

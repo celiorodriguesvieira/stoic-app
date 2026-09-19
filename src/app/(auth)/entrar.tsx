@@ -11,10 +11,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Button } from '@/components/ui/button';
-import { Text } from '@/components/ui/text';
-import { Voltar } from '@/components/ui/voltar';
-import { TextField } from '@/components/ui/text-field';
+import { Button } from '@/components/ui/Button';
+import { Text } from '@/components/ui/Text';
+import { Voltar } from '@/components/ui/Voltar';
+import { TextField } from '@/components/ui/TextField';
 import { useTheme } from '@/hooks/use-theme';
 import { isFirebaseConfigured, useAuth } from '@/lib/auth-context';
 import { minTouchTarget, spacing } from '@/theme';

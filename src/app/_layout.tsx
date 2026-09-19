@@ -12,7 +12,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 
-import { SplashOverlay } from '@/components/splash-overlay';
+import { SplashOverlay } from '@/components/SplashOverlay';
 import { useTheme } from '@/hooks/use-theme';
 import { AuthProvider, useAuth } from '@/lib/auth-context';
 import { OnboardingProvider, useOnboarding } from '@/lib/onboarding-context';
@@ -108,6 +108,16 @@ function RootNavigator() {
             {/* Telas abertas pelo menu "Seu espaço" — exigem conta, como ele. */}
             <Stack.Screen name="perfil" />
             <Stack.Screen name="preferencias" />
+            {/* Detalhe da Biblioteca: fora das abas, com Voltar (item 14 do `649:987`). */}
+            <Stack.Screen name="recurso/[id]" />
+            {/* Atividade: interação e conclusão, fora das abas, com Voltar. */}
+            <Stack.Screen name="atividade/[id]" />
+            {/* Conhecimento da semana: as quatro etapas da aula, aberta pelo card da Home. */}
+            <Stack.Screen name="aula/[id]" />
+            {/* Destinos do Explorar, nas rotas do `468:985`. */}
+            <Stack.Screen name="temas/[id]" />
+            <Stack.Screen name="autores/[id]" />
+            <Stack.Screen name="conteudos/[id]" />
           </Stack.Protected>
 
           <Stack.Protected guard={isSignedIn && !verificacaoPendente && !onboardingDone}>

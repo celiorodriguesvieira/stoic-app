@@ -2,12 +2,12 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { CampoMultiSelecao, CampoSelecao, CampoTexto } from '@/components/admin/campos';
-import { Aviso, Carregando, ErroRecuperavel } from '@/components/admin/estados';
-import { BotaoVoltar } from '@/components/admin/navegacao';
-import { CaixaSecao, Linha, PaginaAdmin } from '@/components/admin/pagina';
-import { Button } from '@/components/ui/button';
-import { Text } from '@/components/ui/text';
+import { CampoMultiSelecao, CampoSelecao, CampoTexto } from '@/components/admin/Campos';
+import { Aviso, Carregando, ErroRecuperavel } from '@/components/admin/Estados';
+import { BotaoVoltar } from '@/components/admin/Navegacao';
+import { CaixaSecao, Linha, PaginaAdmin } from '@/components/admin/Pagina';
+import { Button } from '@/components/ui/Button';
+import { Text } from '@/components/ui/Text';
 import { TEMAS } from '@/lib/admin/acervo';
 import {
   criarConteudo,
